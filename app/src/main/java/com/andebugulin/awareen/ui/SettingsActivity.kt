@@ -169,6 +169,9 @@ class SettingsActivity : AppCompatActivity() {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
             exportSettingsLauncher.launch("awareen_settings_$timestamp.json")
         }
+        findViewById<Button>(R.id.syncSettingsButton).setOnClickListener {
+            startActivity(Intent(this, SyncSettingsActivity::class.java))
+        }
         findViewById<Button>(R.id.importSettingsButton).setOnClickListener {
             importSettingsLauncher.launch(arrayOf("application/json", "*/*"))
         }

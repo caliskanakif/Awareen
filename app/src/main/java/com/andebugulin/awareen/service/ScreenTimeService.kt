@@ -64,6 +64,9 @@ class ScreenTimeService : Service() {
                 overlayController.render(screenTimeSeconds, settings)
                 saveScreenTime()
                 saveAnalyticsData()
+                if (screenTimeSeconds % 300 == 0) {
+                    com.andebugulin.awareen.sync.ScreenTimeSyncExporter.requestExport(this@ScreenTimeService)
+                }
 
                 // Push to the home-screen widget on a slower cadence than the
                 // overlay — widgets aren't designed for per-second updates and
@@ -89,6 +92,7 @@ class ScreenTimeService : Service() {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     saveScreenTime()
+                    com.andebugulin.awareen.sync.ScreenTimeSyncExporter.requestExport(this@ScreenTimeService)
                 }
 
                 Intent.ACTION_SCREEN_ON -> {
