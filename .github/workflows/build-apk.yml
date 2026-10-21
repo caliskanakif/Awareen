@@ -25,7 +25,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug APK
-        run: chmod +x ./gradlew && ./gradlew assembleDebug --stacktrace
+        run: |
+          chmod +x ./gradlew
+          set +e
+          ./gradlew assembleDebug --stacktrace > build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            # make the error readable without log access: show it as a check annotation
+            msg=$(grep -v "^\s*at " build.log | tail -n 40 | cut -c1-300 | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=Gradle build failed::$msg"
+          fi
+          exit $code
 
       - uses: actions/upload-artifact@v4
         with:
