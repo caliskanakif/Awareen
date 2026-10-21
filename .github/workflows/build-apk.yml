@@ -2,8 +2,11 @@ name: Build APK
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -29,3 +32,13 @@ jobs:
           name: awareen-sync-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # Rolling release "latest": a stable public download link for the newest APK
+      # https://github.com/${{ github.repository }}/releases/download/latest/app-debug.apk
+      - name: Publish rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest app/build/outputs/apk/debug/app-debug.apk \
+            --title "Latest build" --notes "Automatic build of commit ${GITHUB_SHA::7}" --prerelease --target "$GITHUB_SHA"

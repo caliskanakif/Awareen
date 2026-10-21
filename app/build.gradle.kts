@@ -32,6 +32,14 @@ android {
     }
 
     signingConfigs {
+        // Fixed key for debug builds so every APK (also from CI) can be installed over the previous one.
+        // Personal sideload use only; the key is public on purpose and must not be used for Play releases.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = file(releaseStorePath!!)
