@@ -26,4 +26,7 @@ object AnalyticsKeys {
 
     /** `analytics_YEAR_MONTH_DAY_hour_H` — one bucket of the hourly breakdown. */
     fun hourKey(dateKey: String, hour: Int): String = "${dateKey}_hour_$hour"
+
+    /** `analytics_YEAR_MONTH_DAY_apps` — JSON object of package → foreground seconds. */
+    fun appUsageKey(dateKey: String): String = "${dateKey}_apps"
 }

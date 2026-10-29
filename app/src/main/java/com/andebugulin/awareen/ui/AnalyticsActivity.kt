@@ -1,8 +1,10 @@
 package com.andebugulin.awareen.ui
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.widget.Button
 import android.widget.ImageButton
@@ -19,6 +21,7 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.andebugulin.awareen.R
+import com.andebugulin.awareen.data.AppUsageRepository
 import com.andebugulin.awareen.data.ScreenTimeRepository
 import com.andebugulin.awareen.data.SettingsRepository
 import com.andebugulin.awareen.domain.AnalyticsKeys
@@ -34,10 +37,15 @@ class AnalyticsActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "AnalyticsActivity"
+        private const val APP_USAGE_ROWS = 10
     }
 
     private lateinit var repo: ScreenTimeRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var appUsageRepository: AppUsageRepository
+    private lateinit var appUsageList: LinearLayout
+    private lateinit var appUsageMessage: TextView
+    private lateinit var grantUsageAccessButton: Button
     private lateinit var daySplitChartView: DaySplitChartView
     private lateinit var daySplitLegend: LinearLayout
     private lateinit var daySplitInsightTextView: TextView
@@ -71,10 +79,17 @@ class AnalyticsActivity : AppCompatActivity() {
 
         repo = ScreenTimeRepository(this)
         settingsRepository = SettingsRepository(this)
+        appUsageRepository = AppUsageRepository(this)
 
         initializeViews()
         loadAnalyticsData()
         updateDaySplit()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Also runs on return from the system "Usage access" screen.
+        refreshAppUsage()
     }
 
     private fun initializeViews() {
@@ -103,6 +118,17 @@ class AnalyticsActivity : AppCompatActivity() {
         )
         daySplitChartView.setValueTypeface(androidx.core.content.res.ResourcesCompat.getFont(this, R.font.fraunces))
         findViewById<Button>(R.id.editDaySplitButton).setOnClickListener { showDaySplitDialog() }
+
+        appUsageList = findViewById(R.id.appUsageList)
+        appUsageMessage = findViewById(R.id.appUsageMessage)
+        grantUsageAccessButton = findViewById(R.id.grantUsageAccessButton)
+        grantUsageAccessButton.setOnClickListener {
+            try {
+                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            } catch (e: Exception) {
+                Toast.makeText(this, "Open Settings › Apps › Special access › Usage access", Toast.LENGTH_LONG).show()
+            }
+        }
 
         toggleDailyLogButton.setOnClickListener {
             val showing = dailyLogContainer.visibility == View.VISIBLE
@@ -215,6 +241,50 @@ class AnalyticsActivity : AppCompatActivity() {
             }
     }
 
+    // =========================================================================
+    // APPS TODAY — per-app foreground time
+    // =========================================================================
+
+    private fun refreshAppUsage() {
+        if (!appUsageRepository.hasPermission()) {
+            appUsageList.removeAllViews()
+            appUsageMessage.text = "Allow usage access to see which apps your screen time goes to. It stays on this phone."
+            appUsageMessage.visibility = View.VISIBLE
+            grantUsageAccessButton.visibility = View.VISIBLE
+            return
+        }
+        grantUsageAccessButton.visibility = View.GONE
+        // Pull the latest from the system log first so the list is current,
+        // not up to five minutes behind the service's last snapshot.
+        Thread {
+            appUsageRepository.recordRecentDays()
+            val todayKey = AnalyticsKeys.analyticsDateKey(LocalDate.now())
+            val rows = appUsageRepository.getAppUsage(todayKey)
+                .take(APP_USAGE_ROWS)
+                .map { (pkg, seconds) -> appUsageRepository.appLabel(pkg) to seconds }
+            runOnUiThread { if (!isDestroyed) showAppUsage(rows) }
+        }.start()
+    }
+
+    private fun showAppUsage(rows: List<Pair<String, Int>>) {
+        appUsageList.removeAllViews()
+        if (rows.isEmpty()) {
+            appUsageMessage.text = "No app use recorded yet today."
+            appUsageMessage.visibility = View.VISIBLE
+            return
+        }
+        appUsageMessage.visibility = View.GONE
+        val dotColor = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.day_screen))
+        rows.forEach { (label, seconds) ->
+            val row = layoutInflater.inflate(R.layout.item_day_split_legend, appUsageList, false)
+            row.findViewById<View>(R.id.legendDot).backgroundTintList = dotColor
+            row.findViewById<TextView>(R.id.legendLabel).text = label
+            row.findViewById<TextView>(R.id.legendValue).text =
+                if (seconds < 60) "<1m" else formatMinutes(seconds / 60)
+            appUsageList.addView(row)
+        }
+    }
+
     private fun formatMinutes(minutes: Int): String {
         val h = minutes / 60
         val m = minutes % 60
@@ -296,6 +366,10 @@ class AnalyticsActivity : AppCompatActivity() {
                         dayObj.put("hourly_breakdown", hourly)
                     }
 
+                    appUsageRepository.getAppUsageJson(dateKey)?.let {
+                        dayObj.put("app_usage", it)
+                    }
+
                     daysArray.put(dayObj)
                 }
             }
@@ -349,6 +423,9 @@ class AnalyticsActivity : AppCompatActivity() {
                         }
                     }
                     repo.importDay(dateKey, screenTime, hourly)
+                    dayObj.optJSONObject("app_usage")?.let {
+                        appUsageRepository.importAppUsage(dateKey, it)
+                    }
                     importedCount++
                 }
             }

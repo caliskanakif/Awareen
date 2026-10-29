@@ -26,6 +26,8 @@ import kotlin.math.abs
  * @param isPreview true for the live preview SettingsActivity shows while the
  *   user edits the timer. A preview is always drawn and, while it exists, the
  *   service's own overlay hides itself so only one timer is on screen.
+ *   Only a preview can be dragged; the service's overlay stays where the
+ *   settings put it and only responds to tap-to-hide.
  * @param onCustomPositionSaved called with the level after the user drags the
  *   timer to a new spot (the position is already persisted by then).
  */
@@ -588,7 +590,10 @@ class OverlayController(
                     MotionEvent.ACTION_MOVE -> {
                         val deltaX = event.rawX - initialTouchX
                         val deltaY = event.rawY - initialTouchY
-                        if (abs(deltaX) > touchSlop || abs(deltaY) > touchSlop) {
+                        // Only the Settings preview can be dragged. The live
+                        // timer is pinned so it can't be shoved aside mid-use;
+                        // its position changes only from inside the app.
+                        if (isPreview && (abs(deltaX) > touchSlop || abs(deltaY) > touchSlop)) {
                             isDragging = true
                             currentLayoutParams?.gravity = Gravity.TOP or Gravity.START
                             currentLayoutParams?.x = initialX + deltaX.toInt()

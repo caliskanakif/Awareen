@@ -19,11 +19,13 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.andebugulin.awareen.R
 import com.andebugulin.awareen.data.AppSettings
+import com.andebugulin.awareen.data.AppUsageRepository
 import com.andebugulin.awareen.data.ScreenTimeRepository
 import com.andebugulin.awareen.data.SettingsRepository
 import com.andebugulin.awareen.overlay.OverlayController
 import com.andebugulin.awareen.overlay.OverlaySettings
 import com.andebugulin.awareen.widget.ScreenTimeWidgetProvider
+import java.util.concurrent.Executors
 
 class ScreenTimeService : Service() {
     private lateinit var overlayController: OverlayController
@@ -32,6 +34,8 @@ class ScreenTimeService : Service() {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var resetScheduler: ResetScheduler
     private lateinit var screenStateMonitor: ScreenStateMonitor
+    private lateinit var appUsageRepository: AppUsageRepository
+    private val appUsageExecutor = Executors.newSingleThreadExecutor()
     private var screenTimeSeconds = 0
     private val handler = Handler(Looper.getMainLooper())
 
@@ -66,6 +70,7 @@ class ScreenTimeService : Service() {
                 saveAnalyticsData()
                 if (screenTimeSeconds % 300 == 0) {
                     com.andebugulin.awareen.sync.ScreenTimeSyncExporter.requestExport(this@ScreenTimeService)
+                    recordAppUsage()
                 }
 
                 // Push to the home-screen widget on a slower cadence than the
@@ -93,6 +98,7 @@ class ScreenTimeService : Service() {
                 Intent.ACTION_SCREEN_OFF -> {
                     saveScreenTime()
                     com.andebugulin.awareen.sync.ScreenTimeSyncExporter.requestExport(this@ScreenTimeService)
+                    recordAppUsage()
                 }
 
                 Intent.ACTION_SCREEN_ON -> {
@@ -160,6 +166,7 @@ class ScreenTimeService : Service() {
             settingsRepository = SettingsRepository(this, prefs)
             resetScheduler = ResetScheduler(this, settingsRepository, repo)
             screenStateMonitor = ScreenStateMonitor(this)
+            appUsageRepository = AppUsageRepository(this, prefs)
             overlayController = OverlayController(this, prefs)
             loadSettings()
 
@@ -238,6 +245,7 @@ class ScreenTimeService : Service() {
         }
 
         overlayController.destroy()
+        appUsageExecutor.shutdown()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -332,6 +340,17 @@ class ScreenTimeService : Service() {
 
     private fun saveAnalyticsData() {
         repo.recordAnalyticsTick(screenTimeSeconds)
+    }
+
+    /** Snapshot per-app time from the system log. Off the main thread: it reads a day of events. */
+    private fun recordAppUsage() {
+        appUsageExecutor.execute {
+            try {
+                appUsageRepository.recordRecentDays()
+            } catch (e: Exception) {
+                Log.e(TAG, "recordAppUsage failed: ${e.message}", e)
+            }
+        }
     }
 
     // =========================================================================

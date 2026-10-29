@@ -3,6 +3,7 @@ package com.andebugulin.awareen.sync
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.andebugulin.awareen.data.AppUsageRepository
 import com.andebugulin.awareen.data.ScreenTimeRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -94,16 +95,22 @@ object ScreenTimeSyncExporter {
             writeText(app, dir, "device.json", deviceJson(app).toString(2))
 
             val repo = ScreenTimeRepository(app)
+            val appUsage = AppUsageRepository(app)
+            appUsage.recordRecentDays()   // no-op without usage access
             val p = prefs(app)
             var written = 0
             for (dateKey in repo.getAnalyticsDateKeys()) {
                 val date = parseDateKey(dateKey) ?: continue
                 val seconds = repo.getDailyScreenTime(dateKey)
                 val hourly = repo.getHourlyBreakdown(dateKey)
-                val sig = seconds.toLong() * 31 + hourly.hashCode()
+                val apps = appUsage.getAppUsage(dateKey)
+                val sig = (seconds.toLong() * 31 + hourly.hashCode()) * 31 + apps.hashCode()
                 if (p.getLong(KEY_LAST_PREFIX + dateKey, -1L) == sig) continue   // unchanged since last export
                 if (seconds <= 0) continue
-                writeText(app, dir, "$date.json", dayJson(app, date, seconds, hourly).toString(2))
+                val appsByName = linkedMapOf<String, Int>()
+                // Two packages can share a label; the schema keys by name, so sum them.
+                apps.forEach { (pkg, s) -> appUsage.appLabel(pkg).let { appsByName[it] = (appsByName[it] ?: 0) + s } }
+                writeText(app, dir, "$date.json", dayJson(app, date, seconds, hourly, appsByName).toString(2))
                 p.edit().putLong(KEY_LAST_PREFIX + dateKey, sig).apply()
                 written++
             }
@@ -125,9 +132,14 @@ object ScreenTimeSyncExporter {
         return try { LocalDate.of(y, m0 + 1, d) } catch (e: Exception) { null }
     }
 
-    internal fun dayJson(c: Context, date: LocalDate, seconds: Int, hourly: Map<Int, Int>): JSONObject {
+    /** [apps] is app name → foreground seconds; empty when usage access isn't granted. */
+    internal fun dayJson(
+        c: Context, date: LocalDate, seconds: Int, hourly: Map<Int, Int>, apps: Map<String, Int>,
+    ): JSONObject {
         val hours = JSONArray()
         for (h in 0..23) hours.put(hourly[h] ?: 0)
+        val appsJson = JSONObject()
+        apps.forEach { (name, s) -> appsJson.put(name, s) }
         return JSONObject()
             .put("schema", SCHEMA)
             .put("deviceId", deviceId(c))
@@ -138,7 +150,7 @@ object ScreenTimeSyncExporter {
             .put("measurement", JSONObject().put("method", "awareen-screen-on"))
             .put("totalSeconds", seconds)
             .put("hours", hours)
-            .put("apps", JSONObject())          // Awareen records no per-app data
+            .put("apps", appsJson)
     }
 
     private fun deviceJson(c: Context) = JSONObject()
