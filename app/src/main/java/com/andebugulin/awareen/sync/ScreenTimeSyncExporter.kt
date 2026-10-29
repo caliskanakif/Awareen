@@ -36,6 +36,7 @@ object ScreenTimeSyncExporter {
     private const val KEY_DEVICE_NAME = "device_name"
     private const val KEY_STATUS = "last_status"
     private const val KEY_LAST_PREFIX = "last_seconds_"
+    private const val KEY_DOC_PREFIX = "doc_uri_"
     private const val SCHEMA = 1
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -68,7 +69,7 @@ object ScreenTimeSyncExporter {
         prefs(c).edit().apply {
             if (uri == null) remove(KEY_TREE) else putString(KEY_TREE, uri.toString())
             // forget what was exported so a new folder receives the whole history
-            prefs(c).all.keys.filter { it.startsWith(KEY_LAST_PREFIX) }.forEach { remove(it) }
+            prefs(c).all.keys.filter { it.startsWith(KEY_LAST_PREFIX) || it.startsWith(KEY_DOC_PREFIX) }.forEach { remove(it) }
         }.apply()
     }
 
@@ -84,15 +85,20 @@ object ScreenTimeSyncExporter {
         }
     }
 
-    /** Synchronous variant for the "Sync now" button (call from a background thread). */
+    /**
+     * Synchronous variant for the "Sync now" button (call from a background thread).
+     * Synchronized: two overlapping runs would both miss a file and create it twice.
+     */
+    @Synchronized
     fun exportNow(context: Context): String {
         val app = context.applicationContext
         val result = try {
             val tree = treeUri(app) ?: return "Sync is off"
             val root = DocumentFile.fromTreeUri(app, tree)
             if (root == null || !root.canWrite()) throw IllegalStateException("Folder not writable - choose it again")
-            val dir = child(root, deviceId(app)) ?: throw IllegalStateException("Cannot create device folder")
-            writeText(app, dir, "device.json", deviceJson(app).toString(2))
+            val dir = child(app, root, deviceId(app)) ?: throw IllegalStateException("Cannot create device folder")
+            val files = DirIndex(app, dir)
+            files.write("device.json", deviceJson(app).toString(2))
 
             val repo = ScreenTimeRepository(app)
             val appUsage = AppUsageRepository(app)
@@ -110,7 +116,7 @@ object ScreenTimeSyncExporter {
                 val appsByName = linkedMapOf<String, Int>()
                 // Two packages can share a label; the schema keys by name, so sum them.
                 apps.forEach { (pkg, s) -> appUsage.appLabel(pkg).let { appsByName[it] = (appsByName[it] ?: 0) + s } }
-                writeText(app, dir, "$date.json", dayJson(app, date, seconds, hourly, appsByName).toString(2))
+                files.write("$date.json", dayJson(app, date, seconds, hourly, appsByName).toString(2))
                 p.edit().putLong(KEY_LAST_PREFIX + dateKey, sig).apply()
                 written++
             }
@@ -163,15 +169,44 @@ object ScreenTimeSyncExporter {
 
     // ---------------------------------------------------------------- SAF helpers
 
-    private fun child(parent: DocumentFile, name: String): DocumentFile? =
-        parent.findFile(name) ?: parent.createDirectory(name)
+    // Cloud providers (Google Drive) allow several files with the same name, and their listing can
+    // lag behind or fail while offline. A missed lookup then creates a second "2026-10-26.json" or
+    // a second device folder. So every document we create is remembered and reused while it exists.
 
-    private fun writeText(c: Context, dir: DocumentFile, name: String, text: String) {
-        val existing = dir.findFile(name)
-        val file = existing ?: dir.createFile("application/json", name)
-            ?: throw IllegalStateException("Cannot create $name")
-        // "wt" truncates; plain "w" can leave old bytes behind when the new content is shorter
-        c.contentResolver.openOutputStream(file.uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-            ?: throw IllegalStateException("Cannot open $name for writing")
+    private fun remembered(c: Context, key: String, asTree: Boolean): DocumentFile? {
+        val uri = prefs(c).getString(KEY_DOC_PREFIX + key, null)?.let(Uri::parse) ?: return null
+        return runCatching {
+            val doc = if (asTree) DocumentFile.fromTreeUri(c, uri) else DocumentFile.fromSingleUri(c, uri)
+            doc?.takeIf { it.exists() }
+        }.getOrNull()
+    }
+
+    private fun remember(c: Context, key: String, doc: DocumentFile) =
+        prefs(c).edit().putString(KEY_DOC_PREFIX + key, doc.uri.toString()).apply()
+
+    private fun child(c: Context, parent: DocumentFile, name: String): DocumentFile? {
+        remembered(c, name, asTree = true)?.takeIf { it.isDirectory }?.let { return it }
+        val dir = parent.findFile(name) ?: parent.createDirectory(name) ?: return null
+        remember(c, name, dir)
+        return dir
+    }
+
+    /** Lists the device folder once per export instead of once per file (findFile lists every time). */
+    private class DirIndex(private val c: Context, private val dir: DocumentFile) {
+        private val byName = HashMap<String, DocumentFile>().apply {
+            for (f in dir.listFiles()) f.name?.let { putIfAbsent(it, f) }
+        }
+
+        fun write(name: String, text: String) {
+            val key = "${dir.name}/$name"
+            val file = byName[name] ?: remembered(c, key, asTree = false)
+                ?: dir.createFile("application/json", name)
+                ?: throw IllegalStateException("Cannot create $name")
+            byName[name] = file
+            remember(c, key, file)
+            // "wt" truncates; plain "w" can leave old bytes behind when the new content is shorter
+            c.contentResolver.openOutputStream(file.uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                ?: throw IllegalStateException("Cannot open $name for writing")
+        }
     }
 }
