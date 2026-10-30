@@ -1,7 +1,9 @@
 package com.andebugulin.awareen.sync
 
 import android.content.Context
+import android.database.ContentObserver
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import com.andebugulin.awareen.data.AppUsageRepository
 import com.andebugulin.awareen.data.ScreenTimeRepository
@@ -11,7 +13,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -37,6 +41,7 @@ object ScreenTimeSyncExporter {
     private const val KEY_STATUS = "last_status"
     private const val KEY_LAST_PREFIX = "last_seconds_"
     private const val KEY_DOC_PREFIX = "doc_uri_"
+    private const val LISTING_WAIT_MS = 15_000L
     private const val SCHEMA = 1
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -184,8 +189,37 @@ object ScreenTimeSyncExporter {
     private fun remember(c: Context, key: String, doc: DocumentFile) =
         prefs(c).edit().putString(KEY_DOC_PREFIX + key, doc.uri.toString()).apply()
 
+    /**
+     * Google Drive first answers a listing from its cache, often empty, flagged EXTRA_LOADING, and
+     * delivers the real one later, sometimes in several rounds. Listing too early made us create a
+     * second device folder, so wait (bounded) until the provider says it is done.
+     */
+    private fun awaitListing(c: Context, dir: DocumentFile) {
+        val uri = runCatching {
+            DocumentsContract.buildChildDocumentsUriUsingTree(dir.uri, DocumentsContract.getDocumentId(dir.uri))
+        }.getOrNull() ?: return
+        val deadline = System.currentTimeMillis() + LISTING_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val loading = runCatching {
+                c.contentResolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID), null, null, null)?.use { cursor ->
+                    if (cursor.extras?.getBoolean(DocumentsContract.EXTRA_LOADING) != true) return@use false
+                    val changed = CountDownLatch(1)
+                    val observer = object : ContentObserver(null) {
+                        override fun onChange(selfChange: Boolean) = changed.countDown()
+                    }
+                    cursor.registerContentObserver(observer)
+                    changed.await(deadline - System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                    cursor.unregisterContentObserver(observer)
+                    true
+                }
+            }.getOrNull() ?: false
+            if (!loading) return
+        }
+    }
+
     private fun child(c: Context, parent: DocumentFile, name: String): DocumentFile? {
         remembered(c, name, asTree = true)?.takeIf { it.isDirectory }?.let { return it }
+        awaitListing(c, parent)
         val dir = parent.findFile(name) ?: parent.createDirectory(name) ?: return null
         remember(c, name, dir)
         return dir
@@ -194,6 +228,7 @@ object ScreenTimeSyncExporter {
     /** Lists the device folder once per export instead of once per file (findFile lists every time). */
     private class DirIndex(private val c: Context, private val dir: DocumentFile) {
         private val byName = HashMap<String, DocumentFile>().apply {
+            awaitListing(c, dir)
             for (f in dir.listFiles()) f.name?.let { putIfAbsent(it, f) }
         }
 
