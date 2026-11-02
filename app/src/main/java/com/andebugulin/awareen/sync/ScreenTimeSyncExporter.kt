@@ -43,6 +43,7 @@ object ScreenTimeSyncExporter {
     private const val KEY_DOC_PREFIX = "doc_uri_"
     private const val LISTING_WAIT_MS = 15_000L
     private const val SCHEMA = 1
+    private const val EXPORT_FORMAT = 2L   // bump to re-export every day once (2: totals from hourly buckets)
 
     private val executor = Executors.newSingleThreadExecutor()
     private val running = AtomicBoolean(false)
@@ -112,10 +113,10 @@ object ScreenTimeSyncExporter {
             var written = 0
             for (dateKey in repo.getAnalyticsDateKeys()) {
                 val date = parseDateKey(dateKey) ?: continue
-                val seconds = repo.getDailyScreenTime(dateKey)
                 val hourly = repo.getHourlyBreakdown(dateKey)
+                val seconds = dayTotal(repo.getDailyScreenTime(dateKey), hourly)
                 val apps = appUsage.getAppUsage(dateKey)
-                val sig = (seconds.toLong() * 31 + hourly.hashCode()) * 31 + apps.hashCode()
+                val sig = ((EXPORT_FORMAT * 31 + seconds.toLong()) * 31 + hourly.hashCode()) * 31 + apps.hashCode()
                 if (p.getLong(KEY_LAST_PREFIX + dateKey, -1L) == sig) continue   // unchanged since last export
                 if (seconds <= 0) continue
                 val appsByName = linkedMapOf<String, Int>()
@@ -142,6 +143,15 @@ object ScreenTimeSyncExporter {
         val (y, m0, d) = parts.map { it.toIntOrNull() ?: return null }
         return try { LocalDate.of(y, m0 + 1, d) } catch (e: Exception) { null }
     }
+
+    /**
+     * The calendar day's screen time. Awareen's running counter follows the user's reset time
+     * (e.g. 05:00): after midnight it keeps counting yesterday's total into the new date and is
+     * zeroed at the reset, so it is wrong for a calendar day. The hourly buckets get every second
+     * of the day and are never reset; the counter is only used for days without them.
+     */
+    internal fun dayTotal(counterSeconds: Int, hourly: Map<Int, Int>): Int =
+        if (hourly.isEmpty()) counterSeconds else hourly.values.sum()
 
     /** [apps] is app name → foreground seconds; empty when usage access isn't granted. */
     internal fun dayJson(
