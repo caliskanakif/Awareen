@@ -18,7 +18,9 @@ class BootReceiver : BroadcastReceiver() {
 
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
-            "android.intent.action.QUICKBOOT_POWERON" -> {
+            "android.intent.action.QUICKBOOT_POWERON",
+            // An app update kills the service; without this, tracking stays off until opened.
+            Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 // Check if overlay permission is granted before starting service
                 if (Settings.canDrawOverlays(context)) {
                     try {
