@@ -63,6 +63,7 @@ class LineChartView @JvmOverloads constructor(
         color = ContextCompat.getColor(context, R.color.text_primary)
     }
     private val path = Path()
+    private val labelBg = android.graphics.RectF()
 
     fun setData(newValues: List<Int>, newLabels: List<String>, selectedIndex: Int, format: (Int) -> String) {
         values = newValues
@@ -115,8 +116,14 @@ class LineChartView @JvmOverloads constructor(
             canvas.drawText(labels[i], x, height - dp(2f), if (i == selected) valuePaint else labelPaint)
         }
         if (selected in values.indices) {
-            val x = xAt(selected).coerceIn(dp(24f), width - dp(24f))
-            canvas.drawText(formatValue(values[selected]), x, yAt(values[selected]) - dp(10f), valuePaint)
+            val text = formatValue(values[selected])
+            val half = valuePaint.measureText(text) / 2f + dp(5f)
+            val x = xAt(selected).coerceIn(half, width - half)
+            val baseline = (yAt(values[selected]) - dp(12f)).coerceAtLeast(valuePaint.textSize + dp(2f))
+            // A surface-colored chip keeps the value readable where the line runs through it.
+            labelBg.set(x - half, baseline - valuePaint.textSize - dp(1f), x + half, baseline + dp(4f))
+            canvas.drawRoundRect(labelBg, dp(4f), dp(4f), ringPaint)
+            canvas.drawText(text, x, baseline, valuePaint)
         }
     }
 
