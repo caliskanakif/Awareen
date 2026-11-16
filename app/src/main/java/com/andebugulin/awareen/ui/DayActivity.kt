@@ -189,26 +189,7 @@ class DayActivity : AppCompatActivity() {
         }
         appsChart.visibility = View.VISIBLE
         message.visibility = View.GONE
-
-        val palette = listOf(R.color.app_1, R.color.app_2, R.color.app_3, R.color.app_4,
-            R.color.app_5, R.color.app_6, R.color.app_7, R.color.app_8).map { ContextCompat.getColor(this, it) }
-        val other = ContextCompat.getColor(this, R.color.app_other)
-        val sum = apps.sumOf { it.second }.coerceAtLeast(1)
-        val colored = apps.take(palette.size)
-        val rest = apps.drop(palette.size).sumOf { it.second }
-        val segments = colored.mapIndexed { i, (_, s) -> DaySegment(s, palette[i]) } +
-            listOfNotNull(rest.takeIf { it > 0 }?.let { DaySegment(it, other) })
-        appsChart.setData(segments, apps.size.toString(), if (apps.size == 1) "app" else "apps")
-
-        apps.forEachIndexed { i, (label, seconds) ->
-            val row = layoutInflater.inflate(R.layout.item_day_split_legend, list, false)
-            row.findViewById<View>(R.id.legendDot).backgroundTintList =
-                android.content.res.ColorStateList.valueOf(palette.getOrElse(i) { other })
-            row.findViewById<TextView>(R.id.legendLabel).text = label
-            row.findViewById<TextView>(R.id.legendValue).text =
-                "${formatDuration(seconds)}  ·  ${(seconds * 100.0 / sum).let { if (it < 1) "<1" else it.toInt().toString() }}%"
-            list.addView(row)
-        }
+        ChartStyle.showApps(this, appsChart, list, apps)
     }
 
     private fun renderHours(hours: Map<Int, Int>, total: Int) {
@@ -225,14 +206,5 @@ class DayActivity : AppCompatActivity() {
             "Screen on in $active of 24 hours."
     }
 
-    private fun formatDuration(seconds: Int): String {
-        if (seconds < 60) return if (seconds <= 0) "0m" else "<1m"
-        val h = seconds / 3600
-        val m = seconds % 3600 / 60
-        return when {
-            h == 0 -> "${m}m"
-            m == 0 -> "${h}h"
-            else -> "${h}h ${m}m"
-        }
-    }
+    private fun formatDuration(seconds: Int): String = ChartStyle.formatDuration(seconds)
 }

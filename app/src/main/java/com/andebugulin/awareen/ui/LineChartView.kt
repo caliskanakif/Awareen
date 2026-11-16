@@ -26,6 +26,10 @@ class LineChartView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
+    companion object {
+        private const val MAX_DOTS = 31
+    }
+
     var onPointTap: ((Int) -> Unit)? = null
 
     private var values: List<Int> = emptyList()
@@ -104,7 +108,9 @@ class LineChartView @JvmOverloads constructor(
         }
         canvas.drawPath(line, linePaint)
 
+        // Beyond a month the dots would merge into a bead chain; then only the selected one is drawn.
         values.forEachIndexed { i, v ->
+            if (i != selected && values.size > MAX_DOTS) return@forEachIndexed
             val r = if (i == selected) dp(5.5f) else dp(3f)
             if (i == selected) canvas.drawCircle(xAt(i), yAt(v), r + dp(2.5f), ringPaint)
             canvas.drawCircle(xAt(i), yAt(v), r, dotPaint)

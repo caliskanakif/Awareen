@@ -58,6 +58,7 @@ class AnalyticsActivity : AppCompatActivity() {
     private lateinit var lifetimeDaysTextView: TextView
     private lateinit var adapter: AnalyticsAdapter
     private var resetHour = 0
+    private lateinit var overview: OverviewSection
 
     /** The day as the user set it (reset time to reset time), not the calendar day. */
     private fun trackingToday(): LocalDate = TrackingDay.dateOf(
@@ -90,8 +91,15 @@ class AnalyticsActivity : AppCompatActivity() {
         resetHour = settingsRepository.getResetHour()
 
         initializeViews()
+        overview = OverviewSection(this, repo, appUsageRepository, resetHour, trackingToday())
+        overview.show()
         loadAnalyticsData()
         updateDaySplit()
+    }
+
+    override fun onDestroy() {
+        overview.close()
+        super.onDestroy()
     }
 
     override fun onResume() {
