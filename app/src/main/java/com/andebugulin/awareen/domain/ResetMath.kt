@@ -56,7 +56,7 @@ object ResetMath {
      * an out-of-range value must degrade to a valid reset time rather than
      * raise and take the loop down.
      */
-    private fun resetOn(date: LocalDate, hour: Int, minute: Int, zone: ZoneId): Long =
+    fun resetOn(date: LocalDate, hour: Int, minute: Int, zone: ZoneId): Long =
         date.atTime(LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)))
             .atZone(zone)
             .toInstant()

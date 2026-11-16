@@ -70,4 +70,19 @@
     <color name="day_free">#199E70</color>
     <color name="day_screen">#E66767</color>
 
+    <!--
+        Apps on the day view's donut, most used first. Categorical like the
+        set above (which it starts with), then four more hues of similar
+        weight; everything after the eighth app is grouped as app_other.
+    -->
+    <color name="app_1">#3987E5</color>
+    <color name="app_2">#E66767</color>
+    <color name="app_3">#199E70</color>
+    <color name="app_4">#C98500</color>
+    <color name="app_5">#9B6BDF</color>
+    <color name="app_6">#2BA8B8</color>
+    <color name="app_7">#D9649E</color>
+    <color name="app_8">#8C9A3C</color>
+    <color name="app_other">#56635B</color>
+
 </resources>

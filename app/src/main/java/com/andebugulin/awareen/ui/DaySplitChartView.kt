@@ -8,8 +8,8 @@ import android.util.AttributeSet
 import android.view.View
 import kotlin.math.min
 
-/** One slice of the day: its share in minutes and its color. */
-data class DaySegment(val minutes: Int, val color: Int)
+/** One slice of the ring: its share (any unit, e.g. minutes) and its color. */
+data class DaySegment(val value: Int, val color: Int)
 
 /**
  * Donut showing how a 24-hour day splits up (sleep, work, free time, screen
@@ -65,7 +65,7 @@ class DaySplitChartView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val total = segments.sumOf { it.minutes }
+        val total = segments.sumOf { it.value }
         if (total <= 0) return
 
         val stroke = arcPaint.strokeWidth
@@ -76,10 +76,10 @@ class DaySplitChartView @JvmOverloads constructor(
 
         val radius = size / 2f
         val gapDegrees = Math.toDegrees((dp(2f) / radius).toDouble()).toFloat()
-        val visible = segments.filter { it.minutes > 0 }
+        val visible = segments.filter { it.value > 0 }
         var start = -90f
         visible.forEach { seg ->
-            val sweep = 360f * seg.minutes / total
+            val sweep = 360f * seg.value / total
             arcPaint.color = seg.color
             val gap = if (visible.size > 1) gapDegrees else 0f
             canvas.drawArc(oval, start + gap / 2f, (sweep - gap).coerceAtLeast(0.5f), false, arcPaint)

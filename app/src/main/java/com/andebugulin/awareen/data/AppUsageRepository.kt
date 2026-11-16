@@ -12,6 +12,7 @@ import android.os.Process
 import android.util.Log
 import com.andebugulin.awareen.domain.AnalyticsKeys
 import com.andebugulin.awareen.domain.AppUsageMath
+import com.andebugulin.awareen.domain.TrackingDay
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.ZoneId
@@ -28,6 +29,7 @@ class AppUsageRepository(
     private val prefs: SharedPreferences,
 ) {
     private val appContext = context.applicationContext
+    private val settings = SettingsRepository(appContext)
 
     constructor(context: Context) : this(
         context,
@@ -50,20 +52,34 @@ class AppUsageRepository(
     // =========================================================================
 
     /**
-     * Recompute today and yesterday from the system log and store them.
-     * Yesterday is included so its last minutes before midnight are captured
-     * even if the previous run happened earlier in the evening. Does I/O and
-     * may take tens of milliseconds — call off the main thread.
+     * Recompute the current and the previous tracking day (reset time to reset
+     * time, see [TrackingDay]) from the system log and store them under the
+     * date each starts on. The previous day is included so its last minutes
+     * are captured even if the previous run happened earlier. When the reset
+     * time differs from the one the stored days were cut at (also the first run
+     * after counting by calendar days), the last [RECUT_DAYS] are cut again, as
+     * far as the system still has them. Does I/O and may take tens of
+     * milliseconds — call off the main thread.
      */
     fun recordRecentDays() {
         if (!hasPermission()) return
-        val today = LocalDate.now()
-        recordDay(today.minusDays(1))
-        recordDay(today)
+        val hour = settings.getResetHour()
+        val minute = settings.getResetMinute()
+        val zone = ZoneId.systemDefault()
+        val today = TrackingDay.dateOf(System.currentTimeMillis(), hour, minute, zone)
+        val boundary = "$hour:$minute"
+        val recut = prefs.getString(KEY_DAY_BOUNDARY, null) != boundary
+        val back = if (recut) RECUT_DAYS else 1L
+        for (i in back downTo 0L) recordDay(today.minusDays(i), hour, minute, zone, checkRetention = i > 1)
+        if (recut) prefs.edit().putString(KEY_DAY_BOUNDARY, boundary).apply()
     }
 
-    private fun recordDay(date: LocalDate) {
-        val usage = computeDay(date)
+    private fun recordDay(date: LocalDate, hour: Int, minute: Int, zone: ZoneId, checkRetention: Boolean) {
+        val start = TrackingDay.startMillis(date, hour, minute, zone)
+        val end = minOf(TrackingDay.endMillis(date, hour, minute, zone), System.currentTimeMillis())
+        // A day the system only partly remembers would replace complete history with a fragment.
+        if (checkRetention && !systemHasEventsBefore(start - LOOKBACK_MS)) return
+        val usage = computeDay(start, end)
         // An empty result means the system no longer has that day (or the
         // phone was unused) — never overwrite stored history with nothing.
         if (usage.isEmpty()) return
@@ -74,19 +90,20 @@ class AppUsageRepository(
             .apply()
     }
 
-    private fun computeDay(date: LocalDate): Map<String, Int> {
-        val zone = ZoneId.systemDefault()
-        val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
-        val end = minOf(
-            date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
-            System.currentTimeMillis()
-        )
+    private fun systemHasEventsBefore(ms: Long): Boolean = try {
+        val usm = appContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        usm.queryEvents(ms - 24 * LOOKBACK_MS, ms).hasNextEvent()
+    } catch (e: Exception) {
+        false
+    }
+
+    private fun computeDay(start: Long, end: Long): Map<String, Int> {
         if (end <= start) return emptyMap()
 
         val usm = appContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val events = mutableListOf<AppUsageMath.Event>()
         try {
-            // Look back an hour so an app already open at midnight is known.
+            // Look back an hour so an app already open at the day's start is known.
             val raw = usm.queryEvents(start - LOOKBACK_MS, end)
             val e = UsageEvents.Event()
             while (raw.hasNextEvent()) {
@@ -165,5 +182,7 @@ class AppUsageRepository(
     companion object {
         private const val TAG = "AppUsageRepository"
         private const val LOOKBACK_MS = 60 * 60 * 1000L
+        private const val KEY_DAY_BOUNDARY = "app_usage_day_boundary"
+        private const val RECUT_DAYS = 9L
     }
 }

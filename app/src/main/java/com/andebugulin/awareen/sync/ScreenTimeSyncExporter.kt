@@ -7,6 +7,8 @@ import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import com.andebugulin.awareen.data.AppUsageRepository
 import com.andebugulin.awareen.data.ScreenTimeRepository
+import com.andebugulin.awareen.data.SettingsRepository
+import com.andebugulin.awareen.domain.AnalyticsKeys
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -43,7 +45,7 @@ object ScreenTimeSyncExporter {
     private const val KEY_DOC_PREFIX = "doc_uri_"
     private const val LISTING_WAIT_MS = 15_000L
     private const val SCHEMA = 1
-    private const val EXPORT_FORMAT = 2L   // bump to re-export every day once (2: totals from hourly buckets)
+    private const val EXPORT_FORMAT = 3L   // bump to re-export every day once (3: days run reset to reset)
 
     private val executor = Executors.newSingleThreadExecutor()
     private val running = AtomicBoolean(false)
@@ -109,20 +111,27 @@ object ScreenTimeSyncExporter {
             val repo = ScreenTimeRepository(app)
             val appUsage = AppUsageRepository(app)
             appUsage.recordRecentDays()   // no-op without usage access
+            val settings = SettingsRepository(app)
+            val resetHour = settings.getResetHour()
+            val resetTime = "%02d:%02d".format(resetHour, settings.getResetMinute())
             val p = prefs(app)
             var written = 0
-            for (dateKey in repo.getAnalyticsDateKeys()) {
-                val date = parseDateKey(dateKey) ?: continue
-                val hourly = repo.getHourlyBreakdown(dateKey)
-                val seconds = dayTotal(repo.getDailyScreenTime(dateKey), hourly)
+            // Days run from the reset time to the reset time, like the counter (see TrackingDay).
+            for (date in repo.getTrackingDayCandidates()) {
+                val dateKey = AnalyticsKeys.analyticsDateKey(date)
+                val hourly = repo.getTrackingDayHours(date, resetHour)
+                val seconds = repo.getTrackingDayTotal(date, resetHour)
                 val apps = appUsage.getAppUsage(dateKey)
-                val sig = ((EXPORT_FORMAT * 31 + seconds.toLong()) * 31 + hourly.hashCode()) * 31 + apps.hashCode()
-                if (p.getLong(KEY_LAST_PREFIX + dateKey, -1L) == sig) continue   // unchanged since last export
-                if (seconds <= 0) continue
+                val sig = (((EXPORT_FORMAT * 31 + seconds.toLong()) * 31 + hourly.hashCode()) * 31 +
+                    apps.hashCode()) * 31 + resetTime.hashCode()
+                val last = p.getLong(KEY_LAST_PREFIX + dateKey, -1L)
+                if (last == sig) continue   // unchanged since last export
+                // An empty day is only written to correct a file exported earlier (e.g. by calendar day).
+                if (seconds <= 0 && last == -1L) continue
                 val appsByName = linkedMapOf<String, Int>()
                 // Two packages can share a label; the schema keys by name, so sum them.
                 apps.forEach { (pkg, s) -> appUsage.appLabel(pkg).let { appsByName[it] = (appsByName[it] ?: 0) + s } }
-                files.write("$date.json", dayJson(app, date, seconds, hourly, appsByName).toString(2))
+                files.write("$date.json", dayJson(app, date, resetTime, seconds, hourly, appsByName).toString(2))
                 p.edit().putLong(KEY_LAST_PREFIX + dateKey, sig).apply()
                 written++
             }
@@ -136,26 +145,13 @@ object ScreenTimeSyncExporter {
 
     // ---------------------------------------------------------------- format
 
-    /** Awareen keys are analytics_YEAR_MONTH_DAY with a 0-based month (see AnalyticsKeys). */
-    internal fun parseDateKey(key: String): LocalDate? {
-        val parts = key.removePrefix("analytics_").split("_")
-        if (parts.size != 3) return null
-        val (y, m0, d) = parts.map { it.toIntOrNull() ?: return null }
-        return try { LocalDate.of(y, m0 + 1, d) } catch (e: Exception) { null }
-    }
-
     /**
-     * The calendar day's screen time. Awareen's running counter follows the user's reset time
-     * (e.g. 05:00): after midnight it keeps counting yesterday's total into the new date and is
-     * zeroed at the reset, so it is wrong for a calendar day. The hourly buckets get every second
-     * of the day and are never reset; the counter is only used for days without them.
+     * [hourly] is clock hour → seconds of the tracking day, so hours before [resetTime] are the
+     * next morning's (same as the PC tracker). [apps] is app name → foreground seconds; empty
+     * when usage access isn't granted.
      */
-    internal fun dayTotal(counterSeconds: Int, hourly: Map<Int, Int>): Int =
-        if (hourly.isEmpty()) counterSeconds else hourly.values.sum()
-
-    /** [apps] is app name → foreground seconds; empty when usage access isn't granted. */
     internal fun dayJson(
-        c: Context, date: LocalDate, seconds: Int, hourly: Map<Int, Int>, apps: Map<String, Int>,
+        c: Context, date: LocalDate, resetTime: String, seconds: Int, hourly: Map<Int, Int>, apps: Map<String, Int>,
     ): JSONObject {
         val hours = JSONArray()
         for (h in 0..23) hours.put(hourly[h] ?: 0)
@@ -166,6 +162,7 @@ object ScreenTimeSyncExporter {
             .put("deviceId", deviceId(c))
             .put("date", date.toString())
             .put("timeZone", ZoneId.systemDefault().id)
+            .put("resetTime", resetTime)
             .put("updatedAt", Instant.now().toString())
             .put("kind", "measured")
             .put("measurement", JSONObject().put("method", "awareen-screen-on"))

@@ -1,0 +1,132 @@
+package com.andebugulin.awareen.ui
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.DashPathEffect
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Shader
+import android.util.AttributeSet
+import android.view.MotionEvent
+import android.view.View
+import androidx.core.content.ContextCompat
+import com.andebugulin.awareen.R
+import kotlin.math.abs
+
+/**
+ * A line over consecutive days with one highlighted point (the day being
+ * looked at) and a dashed average line. Tapping near a point reports its
+ * index through [onPointTap].
+ */
+class LineChartView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : View(context, attrs, defStyleAttr) {
+
+    var onPointTap: ((Int) -> Unit)? = null
+
+    private var values: List<Int> = emptyList()
+    private var labels: List<String> = emptyList()
+    private var selected = -1
+    private var formatValue: (Int) -> String = { it.toString() }
+
+    private fun dp(v: Float): Float = v * resources.displayMetrics.density
+
+    private val lineColor = ContextCompat.getColor(context, R.color.accent_primary)
+    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = lineColor
+        style = Paint.Style.STROKE
+        strokeWidth = dp(2.5f)
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val avgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.text_muted)
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(4f), dp(4f)), 0f)
+    }
+    private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lineColor }
+    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.surface)
+    }
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.text_muted)
+        textAlign = Paint.Align.CENTER
+        textSize = 11f * resources.displayMetrics.scaledDensity
+    }
+    private val valuePaint = Paint(labelPaint).apply {
+        color = ContextCompat.getColor(context, R.color.text_primary)
+    }
+    private val path = Path()
+
+    fun setData(newValues: List<Int>, newLabels: List<String>, selectedIndex: Int, format: (Int) -> String) {
+        values = newValues
+        labels = newLabels
+        selected = selectedIndex
+        formatValue = format
+        invalidate()
+    }
+
+    private fun xAt(i: Int): Float {
+        val pad = dp(14f)
+        return if (values.size < 2) width / 2f else pad + (width - 2 * pad) * i / (values.size - 1)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (values.isEmpty()) return
+        val max = (values.maxOrNull() ?: 0).coerceAtLeast(1)
+        val top = valuePaint.textSize + dp(10f)
+        val bottom = height - labelPaint.textSize - dp(10f)
+        fun yAt(v: Int) = bottom - (bottom - top) * v / max
+
+        // Soft fill under the line, fading towards the baseline.
+        fillPaint.shader = LinearGradient(0f, top, 0f, bottom,
+            (lineColor and 0x00FFFFFF) or 0x40000000, lineColor and 0x00FFFFFF, Shader.TileMode.CLAMP)
+        path.reset()
+        values.forEachIndexed { i, v -> if (i == 0) path.moveTo(xAt(i), yAt(v)) else path.lineTo(xAt(i), yAt(v)) }
+        val line = Path(path)
+        path.lineTo(xAt(values.size - 1), bottom)
+        path.lineTo(xAt(0), bottom)
+        path.close()
+        canvas.drawPath(path, fillPaint)
+
+        val nonZero = values.filter { it > 0 }
+        if (nonZero.isNotEmpty()) {
+            val avgY = yAt(nonZero.sum() / nonZero.size)
+            canvas.drawLine(xAt(0), avgY, xAt(values.size - 1), avgY, avgPaint)
+        }
+        canvas.drawPath(line, linePaint)
+
+        values.forEachIndexed { i, v ->
+            val r = if (i == selected) dp(5.5f) else dp(3f)
+            if (i == selected) canvas.drawCircle(xAt(i), yAt(v), r + dp(2.5f), ringPaint)
+            canvas.drawCircle(xAt(i), yAt(v), r, dotPaint)
+        }
+
+        // Labels: first, last and the selected day, so they never crowd.
+        setOf(0, values.size - 1, selected).filter { it in labels.indices }.forEach { i ->
+            val x = xAt(i).coerceIn(dp(18f), width - dp(18f))
+            canvas.drawText(labels[i], x, height - dp(2f), if (i == selected) valuePaint else labelPaint)
+        }
+        if (selected in values.indices) {
+            val x = xAt(selected).coerceIn(dp(24f), width - dp(24f))
+            canvas.drawText(formatValue(values[selected]), x, yAt(values[selected]) - dp(10f), valuePaint)
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (values.isEmpty() || onPointTap == null) return super.onTouchEvent(event)
+        if (event.action == MotionEvent.ACTION_UP) {
+            val nearest = values.indices.minByOrNull { abs(xAt(it) - event.x) } ?: return true
+            onPointTap?.invoke(nearest)
+        }
+        return true
+    }
+}

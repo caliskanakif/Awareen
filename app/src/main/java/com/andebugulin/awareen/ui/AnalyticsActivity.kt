@@ -25,12 +25,13 @@ import com.andebugulin.awareen.data.AppUsageRepository
 import com.andebugulin.awareen.data.ScreenTimeRepository
 import com.andebugulin.awareen.data.SettingsRepository
 import com.andebugulin.awareen.domain.AnalyticsKeys
+import com.andebugulin.awareen.domain.TrackingDay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.math.abs
 
 class AnalyticsActivity : AppCompatActivity() {
@@ -56,6 +57,12 @@ class AnalyticsActivity : AppCompatActivity() {
     private lateinit var lifetimeYearsTextView: TextView
     private lateinit var lifetimeDaysTextView: TextView
     private lateinit var adapter: AnalyticsAdapter
+    private var resetHour = 0
+
+    /** The day as the user set it (reset time to reset time), not the calendar day. */
+    private fun trackingToday(): LocalDate = TrackingDay.dateOf(
+        System.currentTimeMillis(), resetHour, settingsRepository.getResetMinute(), ZoneId.systemDefault()
+    )
 
     private lateinit var toggleDailyLogButton: Button
     private lateinit var dailyLogContainer: View
@@ -80,6 +87,7 @@ class AnalyticsActivity : AppCompatActivity() {
         repo = ScreenTimeRepository(this)
         settingsRepository = SettingsRepository(this)
         appUsageRepository = AppUsageRepository(this)
+        resetHour = settingsRepository.getResetHour()
 
         initializeViews()
         loadAnalyticsData()
@@ -106,7 +114,7 @@ class AnalyticsActivity : AppCompatActivity() {
         backButton.setOnClickListener { finish() }
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = AnalyticsAdapter()
+        adapter = AnalyticsAdapter { DayActivity.open(this, it) }
         recyclerView.adapter = adapter
 
         daySplitChartView = findViewById(R.id.daySplitChartView)
@@ -130,6 +138,8 @@ class AnalyticsActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<Button>(R.id.openDayViewButton).setOnClickListener { DayActivity.open(this, trackingToday()) }
+
         toggleDailyLogButton.setOnClickListener {
             val showing = dailyLogContainer.visibility == View.VISIBLE
             dailyLogContainer.visibility = if (showing) View.GONE else View.VISIBLE
@@ -147,7 +157,7 @@ class AnalyticsActivity : AppCompatActivity() {
     }
 
     private fun dayValue(date: LocalDate): Int? =
-        repo.getDailyScreenTime(AnalyticsKeys.analyticsDateKey(date)).takeIf { it > 0 }
+        repo.getTrackingDayTotal(date, resetHour).takeIf { it > 0 }
 
     // =========================================================================
     // YOUR DAY — 24h split into sleep, work, screen time and what's left
@@ -155,7 +165,7 @@ class AnalyticsActivity : AppCompatActivity() {
 
     /** Average daily screen time over the last 30 days that have data (today if none). */
     private fun recentAverageScreenSeconds(): Int {
-        val today = LocalDate.now()
+        val today = trackingToday()
         val values = (0L until 30L).mapNotNull { dayValue(today.minusDays(it)) }
         return if (values.isEmpty()) repo.getTodayScreenTime() else values.sum() / values.size
     }
@@ -258,7 +268,7 @@ class AnalyticsActivity : AppCompatActivity() {
         // not up to five minutes behind the service's last snapshot.
         Thread {
             appUsageRepository.recordRecentDays()
-            val todayKey = AnalyticsKeys.analyticsDateKey(LocalDate.now())
+            val todayKey = AnalyticsKeys.analyticsDateKey(trackingToday())
             val rows = appUsageRepository.getAppUsage(todayKey)
                 .take(APP_USAGE_ROWS)
                 .map { (pkg, seconds) -> appUsageRepository.appLabel(pkg) to seconds }
@@ -297,38 +307,16 @@ class AnalyticsActivity : AppCompatActivity() {
 
     private fun loadAnalyticsData() {
         val analyticsData = getAnalyticsData()
-        adapter.updateData(analyticsData)
+        adapter.updateData(analyticsData, trackingToday())
 
         if (analyticsData.isNotEmpty()) {
             calculateStatistics(analyticsData)
         }
     }
 
-    private fun getAnalyticsData(): List<DayData> {
-        val dayDataList = ArrayList<DayData>()
-        repo.getAnalyticsDateKeys().forEach { dateKey ->
-            val screenTime = repo.getDailyScreenTime(dateKey)
-            if (screenTime > 0) {
-                dayDataList.add(DayData(parseDateKey(dateKey), screenTime))
-            }
-        }
-        dayDataList.sortByDescending { it.date }
-        return dayDataList
-    }
-
-    private fun parseDateKey(dateKey: String): Date {
-        val parts = dateKey.split("_")
-        if (parts.size >= 4) {
-            val year = parts[1].toIntOrNull() ?: 2024
-            val month = parts[2].toIntOrNull() ?: 0
-            val day = parts[3].toIntOrNull() ?: 1
-
-            val calendar = Calendar.getInstance()
-            calendar.set(year, month, day)
-            return calendar.time
-        }
-        return Date()
-    }
+    /** Tracking days (reset time to reset time), newest first. */
+    private fun getAnalyticsData(): List<DayData> =
+        repo.getTrackingDays(resetHour).map { (date, seconds) -> DayData(date, seconds) }
 
     // =========================================================================
     // EXPORT
@@ -535,15 +523,20 @@ class AnalyticsActivity : AppCompatActivity() {
 }
 
 data class DayData(
-    val date: Date,
+    val date: LocalDate,
     val screenTimeSeconds: Int
 )
 
-class AnalyticsAdapter : RecyclerView.Adapter<AnalyticsAdapter.ViewHolder>() {
+/** Daily log rows; tapping one opens that day in [DayActivity]. */
+class AnalyticsAdapter(
+    private val onDayClick: (LocalDate) -> Unit,
+) : RecyclerView.Adapter<AnalyticsAdapter.ViewHolder>() {
     private var data: List<DayData> = emptyList()
+    private var today: LocalDate = LocalDate.now()
 
-    fun updateData(newData: List<DayData>) {
+    fun updateData(newData: List<DayData>, trackingToday: LocalDate) {
         data = newData
+        today = trackingToday
         notifyDataSetChanged()
     }
 
@@ -554,7 +547,9 @@ class AnalyticsAdapter : RecyclerView.Adapter<AnalyticsAdapter.ViewHolder>() {
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(data[position])
+        val day = data[position]
+        holder.bind(day, today)
+        holder.itemView.setOnClickListener { onDayClick(day.date) }
     }
 
     override fun getItemCount() = data.size
@@ -564,19 +559,11 @@ class AnalyticsAdapter : RecyclerView.Adapter<AnalyticsAdapter.ViewHolder>() {
         private val timeTextView: TextView = itemView.findViewById(R.id.timeTextView)
         private val statusTextView: TextView = itemView.findViewById(R.id.statusTextView)
 
-        fun bind(dayData: DayData) {
-            val calendar = Calendar.getInstance()
-            calendar.time = dayData.date
-
-            val today = Calendar.getInstance()
-            val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-
-            dateTextView.text = when {
-                calendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) &&
-                        calendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) -> "Today"
-                calendar.get(Calendar.DAY_OF_YEAR) == yesterday.get(Calendar.DAY_OF_YEAR) &&
-                        calendar.get(Calendar.YEAR) == yesterday.get(Calendar.YEAR) -> "Yesterday"
-                else -> "${calendar.get(Calendar.DAY_OF_MONTH)}/${calendar.get(Calendar.MONTH) + 1}"
+        fun bind(dayData: DayData, today: LocalDate) {
+            dateTextView.text = when (dayData.date) {
+                today -> "Today"
+                today.minusDays(1) -> "Yesterday"
+                else -> "${dayData.date.dayOfMonth}/${dayData.date.monthValue}"
             }
 
             timeTextView.text = formatTime(dayData.screenTimeSeconds)

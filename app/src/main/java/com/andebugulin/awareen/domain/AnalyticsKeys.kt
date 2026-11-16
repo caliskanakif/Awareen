@@ -24,6 +24,14 @@ object AnalyticsKeys {
     fun analyticsDateKey(date: LocalDate): String =
         "analytics_${date.year}_${date.monthValue - 1}_${date.dayOfMonth}"
 
+    /** Inverse of [analyticsDateKey]; null for anything else. */
+    fun parseAnalyticsDateKey(key: String): LocalDate? {
+        val parts = key.removePrefix("analytics_").split("_")
+        if (parts.size != 3) return null
+        val (y, m0, d) = parts.map { it.toIntOrNull() ?: return null }
+        return try { LocalDate.of(y, m0 + 1, d) } catch (e: Exception) { null }
+    }
+
     /** `analytics_YEAR_MONTH_DAY_hour_H` — one bucket of the hourly breakdown. */
     fun hourKey(dateKey: String, hour: Int): String = "${dateKey}_hour_$hour"
 

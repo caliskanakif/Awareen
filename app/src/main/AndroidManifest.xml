@@ -75,6 +75,7 @@
         </activity>
         <activity android:name=".ui.SettingsActivity" />
         <activity android:name=".ui.SyncSettingsActivity" />
+        <activity android:name=".ui.DayActivity" />
         <activity
             android:name=".ui.InfoActivity"
             android:label="About Awareen"

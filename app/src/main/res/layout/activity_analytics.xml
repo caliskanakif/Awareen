@@ -177,6 +177,15 @@
                     android:text="Allow usage access"
                     android:textSize="14sp"
                     android:visibility="gone" />
+
+                <Button
+                    android:id="@+id/openDayViewButton"
+                    style="@style/Widget.Awareen.Button.Flat"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="12dp"
+                    android:text="Every day in detail ›"
+                    android:textSize="14sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

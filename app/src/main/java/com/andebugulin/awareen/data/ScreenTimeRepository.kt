@@ -3,6 +3,7 @@ package com.andebugulin.awareen.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.andebugulin.awareen.domain.AnalyticsKeys
+import com.andebugulin.awareen.domain.TrackingDay
 import java.time.LocalDate
 import java.util.Calendar
 
@@ -99,6 +100,45 @@ class ScreenTimeRepository(private val prefs: SharedPreferences) {
         }
         return result
     }
+
+    // =========================================================================
+    // TRACKING DAYS — reset time to reset time (see TrackingDay)
+    // =========================================================================
+
+    /** Clock hour → seconds of the tracking day starting on [date] at [resetHour]. */
+    fun getTrackingDayHours(date: LocalDate, resetHour: Int): Map<Int, Int> = TrackingDay.hours(
+        resetHour,
+        getHourlyBreakdown(AnalyticsKeys.analyticsDateKey(date)),
+        getHourlyBreakdown(AnalyticsKeys.analyticsDateKey(date.plusDays(1))),
+    )
+
+    /**
+     * Screen time of the tracking day starting on [date]. The running counter
+     * can't be used: after midnight it writes the previous day's total under
+     * the new date until the reset. Only days imported without an hourly
+     * breakdown fall back to it.
+     */
+    fun getTrackingDayTotal(date: LocalDate, resetHour: Int): Int {
+        val hours = getTrackingDayHours(date, resetHour)
+        return if (hours.isNotEmpty()) hours.values.sum()
+        else getDailyScreenTime(AnalyticsKeys.analyticsDateKey(date))
+    }
+
+    /**
+     * Every date a tracking day could start on: each stored date, and the one
+     * before it (its early hours belong to the previous tracking day).
+     */
+    fun getTrackingDayCandidates(): Set<LocalDate> =
+        getAnalyticsDateKeys().mapNotNull(AnalyticsKeys::parseAnalyticsDateKey)
+            .flatMap { listOf(it, it.minusDays(1)) }
+            .toSortedSet()
+
+    /** Tracking days with any screen time, newest first. */
+    fun getTrackingDays(resetHour: Int): List<Pair<LocalDate, Int>> =
+        getTrackingDayCandidates()
+            .map { it to getTrackingDayTotal(it, resetHour) }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.first }
 
     /**
      * Bulk write for analytics import. The caller decides whether to import

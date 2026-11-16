@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One tracking day (reset time to reset time): apps, hours, and how it compares to the days around it. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/app_background"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="24dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp">
+
+            <ImageButton
+                android:id="@+id/backButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Back"
+                android:src="@drawable/ic_arrow_back"
+                app:tint="@color/text_secondary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:fontFamily="@font/fraunces"
+                android:text="Your days"
+                android:textColor="@color/text_primary"
+                android:textSize="24sp" />
+        </RelativeLayout>
+
+        <!-- Day switcher -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/prevDayButton"
+                style="@style/Widget.Awareen.Button.Flat"
+                android:layout_width="48dp"
+                android:layout_height="44dp"
+                android:contentDescription="Previous day"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="‹"
+                android:textSize="22sp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/dayTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fraunces"
+                    android:textColor="@color/text_primary"
+                    android:textSize="20sp" />
+
+                <TextView
+                    android:id="@+id/dayRange"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/nextDayButton"
+                style="@style/Widget.Awareen.Button.Flat"
+                android:layout_width="48dp"
+                android:layout_height="44dp"
+                android:contentDescription="Next day"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="›"
+                android:textSize="22sp" />
+        </LinearLayout>
+
+        <!-- Total -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Awareen.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    style="@style/TextAppearance.Awareen.Overline"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Screen time" />
+
+                <TextView
+                    android:id="@+id/dayTotal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fraunces"
+                    android:textColor="@color/text_primary"
+                    android:textSize="44sp" />
+
+                <TextView
+                    android:id="@+id/dayCompare"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Apps: pie + full list -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="12dp"
+            android:fontFamily="@font/fraunces"
+            android:text="Apps"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Awareen.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.andebugulin.awareen.ui.DaySplitChartView
+                    android:id="@+id/appsChart"
+                    android:layout_width="190dp"
+                    android:layout_height="190dp"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:id="@+id/appsList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/appsMessage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fraunces"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="16sp"
+                    android:textStyle="italic"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Hours: bar chart -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="12dp"
+            android:fontFamily="@font/fraunces"
+            android:text="By hour"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Awareen.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.andebugulin.awareen.ui.BarChartView
+                    android:id="@+id/hoursChart"
+                    android:layout_width="match_parent"
+                    android:layout_height="160dp" />
+
+                <TextView
+                    android:id="@+id/hoursInsight"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:fontFamily="@font/fraunces"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="16sp"
+                    android:textStyle="italic" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Days around it: line chart -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="12dp"
+            android:fontFamily="@font/fraunces"
+            android:text="Last 14 days"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.Awareen.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <com.andebugulin.awareen.ui.LineChartView
+                    android:id="@+id/trendChart"
+                    android:layout_width="match_parent"
+                    android:layout_height="170dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Tap a point to open that day. Dashed line: average."
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+</ScrollView>
