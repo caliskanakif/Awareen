@@ -33,6 +33,10 @@ data class OverlaySettings(
     // string rather than an enum to match timerDisplayMode's convention.
     val cornerStyle: String,
     val borderEnabled: Boolean,
+    // Glass pill with a stage-color border on top (Timer Pill: Glass + Border on Top).
+    val glassEnabled: Boolean = false,
+    // AppSettings.FONT_DEFAULT / FONT_INTER / FONT_MONTSERRAT (ExtraBold, bundled).
+    val font: String = "default",
 ) {
     /** Settings for stage [level] (1..3). */
     fun level(level: Int): LevelSettings = when (level) {

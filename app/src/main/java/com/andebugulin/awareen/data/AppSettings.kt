@@ -57,6 +57,11 @@ object AppSettings {
     const val CORNER_STYLE_SQUARE = "square"
     const val CORNER_STYLE_ROUNDED = "rounded"
     const val OVERLAY_BORDER_ENABLED = "overlay_border_enabled"
+    const val OVERLAY_GLASS_ENABLED = "overlay_glass_enabled"
+    const val OVERLAY_FONT = "overlay_font" // FONT_DEFAULT / FONT_INTER / FONT_MONTSERRAT
+    const val FONT_DEFAULT = "default"
+    const val FONT_INTER = "inter"
+    const val FONT_MONTSERRAT = "montserrat"
 
     // --- Reset Time Settings ---
     const val RESET_HOUR = "reset_hour" // Integer (0-23)
@@ -103,6 +108,8 @@ object AppSettings {
     // changes nothing until the user opts into rounded.
     const val DEFAULT_OVERLAY_CORNER_STYLE = CORNER_STYLE_SQUARE
     const val DEFAULT_OVERLAY_BORDER_ENABLED = false
+    const val DEFAULT_OVERLAY_GLASS_ENABLED = false
+    const val DEFAULT_OVERLAY_FONT = FONT_DEFAULT
 
     const val MIN_DISPLAY_INTERVAL_MINUTES = 1
     const val MAX_DISPLAY_INTERVAL_MINUTES = 10

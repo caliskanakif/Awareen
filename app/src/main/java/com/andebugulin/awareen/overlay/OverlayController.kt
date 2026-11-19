@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import androidx.core.content.res.ResourcesCompat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -105,6 +107,11 @@ class OverlayController(
     private var strokeWidthPx: Int = 0
     private var pillCornerRadiusPx: Float = 0f
 
+    // Glass style: a second background, swapped in while the setting is on.
+    private var glassBackground: GlassPillDrawable? = null
+    private var glassApplied = false
+    private var basePadding = 0
+
     private var currentLevel = 1
 
     // The preset position string for [currentLevel]. Cached so the rotation
@@ -166,6 +173,10 @@ class OverlayController(
             shape = GradientDrawable.RECTANGLE
         }
         overlayView?.background = badgeBackground
+        glassBackground = GlassPillDrawable(density)
+        glassApplied = false
+        appliedFont = null
+        basePadding = overlayView?.paddingTop ?: 0
 
         overlayView?.setOnTouchListener(buildTouchListener(handler))
 
@@ -280,6 +291,98 @@ class OverlayController(
         // 4. Font size
         timeTextView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, levelSettings.fontSize)
 
+        // 4a. Font (bundled Inter / Montserrat ExtraBold, or the original bold system font)
+        applyFont(settings.font)
+
+        // 4b. Glass style: swap the background and give the shadow some room.
+        applyGlass(settings.glassEnabled)
+        if (settings.glassEnabled) {
+            renderGlass(seconds, settings, levelSettings)
+        } else {
+            renderBadge(seconds, settings, levelSettings)
+        }
+
+        // 7. Display-mode visibility. NEVER hides the overlay entirely; the
+        // service keeps ticking so the widget and analytics stay accurate.
+        // Re-evaluated every tick (not only on change) so the service's
+        // overlay also notices a Settings preview appearing or going away.
+        isIntervalVisible = isPreview || OverlayDecisions.shouldShowOverlay(
+            settings.timerDisplayMode,
+            seconds,
+            settings.timerDisplayIntervalMinutes,
+            settings.timerDisplayDurationSeconds
+        )
+        updateTimerVisibility()
+    }
+
+    private var appliedFont: String? = null
+
+    private fun applyFont(font: String) {
+        val tv = timeTextView ?: return
+        if (font == appliedFont) return
+        appliedFont = font
+        val face = when (font) {
+            "inter" -> ResourcesCompat.getFont(context, R.font.inter_extrabold)
+            "montserrat" -> ResourcesCompat.getFont(context, R.font.montserrat_extrabold)
+            else -> null
+        }
+        if (face != null) {
+            tv.typeface = face
+            tv.letterSpacing = -0.02f          // letter-spacing: -.02em, as on the reference page
+        } else {
+            tv.setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+            tv.letterSpacing = 0f
+        }
+    }
+
+    private fun applyGlass(on: Boolean) {
+        val view = overlayView ?: return
+        val tv = timeTextView ?: return
+        if (on == glassApplied) {
+            if (on) updateTextShadow(tv)
+            return
+        }
+        glassApplied = on
+        val glass = glassBackground ?: return
+        if (on) {
+            val room = glass.room.toInt()
+            val extraH = (6f * context.resources.displayMetrics.density).toInt()
+            view.background = glass
+            view.setPadding(basePadding + room + extraH, basePadding + room, basePadding + room + extraH, basePadding + room)
+            // Blur mask filters only run in hardware from Android 9 on.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) view.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            updateTextShadow(tv)
+        } else {
+            view.background = badgeBackground
+            view.setPadding(basePadding, basePadding, basePadding, basePadding)
+            view.setLayerType(View.LAYER_TYPE_NONE, null)
+            tv.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+        }
+        updateLayout()
+    }
+
+    /** text-shadow: 0 1px 12px rgba(0,0,0,.55) on the page's 92 px digits, scaled to the real text size. */
+    private fun updateTextShadow(tv: TextView) {
+        val ts = tv.textSize
+        tv.setShadowLayer(ts * 12f / 92f, 0f, ts / 92f, Color.argb(140, 0, 0, 0))
+    }
+
+    private fun renderGlass(seconds: Int, settings: OverlaySettings, levelSettings: LevelSettings) {
+        val glass = glassBackground ?: return
+        glass.rounded = settings.cornerStyle == "rounded"
+        // The border on top of the glass always carries the stage color.
+        glass.borderColor = levelSettings.color or 0xFF000000.toInt()
+        if (levelSettings.blinkingEnabled && seconds % 2 == 0) {
+            timeTextView?.setTextColor(levelSettings.backgroundColor or 0xFF000000.toInt())
+            glass.bodyColor = levelSettings.color
+        } else {
+            timeTextView?.setTextColor(levelSettings.color)
+            glass.bodyColor = Color.argb(13, 255, 255, 255)
+        }
+        glass.invalidateSelf()
+    }
+
+    private fun renderBadge(seconds: Int, settings: OverlaySettings, levelSettings: LevelSettings) {
         // 5. Shape. A global square/rounded choice, not per-level — it's a
         // style preference, not a severity signal the way color/blink are.
         badgeBackground?.cornerRadius = if (settings.cornerStyle == "rounded") pillCornerRadiusPx else 0f
@@ -306,18 +409,6 @@ class OverlayController(
             timeTextView?.setTextColor(levelSettings.color)
             badgeBackground?.setColor(levelSettings.backgroundColor)
         }
-
-        // 7. Display-mode visibility. NEVER hides the overlay entirely; the
-        // service keeps ticking so the widget and analytics stay accurate.
-        // Re-evaluated every tick (not only on change) so the service's
-        // overlay also notices a Settings preview appearing or going away.
-        isIntervalVisible = isPreview || OverlayDecisions.shouldShowOverlay(
-            settings.timerDisplayMode,
-            seconds,
-            settings.timerDisplayIntervalMinutes,
-            settings.timerDisplayDurationSeconds
-        )
-        updateTimerVisibility()
     }
 
     // =========================================================================

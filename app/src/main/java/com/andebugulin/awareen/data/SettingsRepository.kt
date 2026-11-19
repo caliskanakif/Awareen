@@ -72,6 +72,8 @@ class SettingsRepository(
         cornerStyle = prefs.getString(AppSettings.OVERLAY_CORNER_STYLE, AppSettings.DEFAULT_OVERLAY_CORNER_STYLE)
             ?: AppSettings.DEFAULT_OVERLAY_CORNER_STYLE,
         borderEnabled = prefs.getBoolean(AppSettings.OVERLAY_BORDER_ENABLED, AppSettings.DEFAULT_OVERLAY_BORDER_ENABLED),
+        glassEnabled = prefs.getBoolean(AppSettings.OVERLAY_GLASS_ENABLED, AppSettings.DEFAULT_OVERLAY_GLASS_ENABLED),
+        font = prefs.getString(AppSettings.OVERLAY_FONT, AppSettings.DEFAULT_OVERLAY_FONT) ?: AppSettings.DEFAULT_OVERLAY_FONT,
     )
 
     private fun loadLevelName(level: Int): String =
@@ -120,6 +122,8 @@ class SettingsRepository(
             putInt(AppSettings.TIMER_DISPLAY_DURATION_SECONDS, settings.timerDisplayDurationSeconds)
             putString(AppSettings.OVERLAY_CORNER_STYLE, settings.cornerStyle)
             putBoolean(AppSettings.OVERLAY_BORDER_ENABLED, settings.borderEnabled)
+            putBoolean(AppSettings.OVERLAY_GLASS_ENABLED, settings.glassEnabled)
+            putString(AppSettings.OVERLAY_FONT, settings.font)
             apply()
         }
     }

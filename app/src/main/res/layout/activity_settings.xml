@@ -422,6 +422,40 @@
                     android:layout_weight="1"
                     android:text="Rounded" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/overlayFontToggleGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <Button
+                    android:id="@+id/overlayFontDefault"
+                    style="@style/DisplayModeToggleButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Default" />
+
+                <Button
+                    android:id="@+id/overlayFontInter"
+                    style="@style/DisplayModeToggleButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/inter_extrabold"
+                    android:text="Inter" />
+
+                <Button
+                    android:id="@+id/overlayFontMontserrat"
+                    style="@style/DisplayModeToggleButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/montserrat_extrabold"
+                    android:text="Montserrat" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -439,6 +473,28 @@
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/overlayBorderSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    app:thumbTint="@color/accent_primary"
+                    app:trackTint="@color/control_track" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Glass style (glass pill, stage-color border on top)"
+                    android:textColor="@color/text_primary" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/overlayGlassSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:minHeight="48dp"

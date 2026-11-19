@@ -123,6 +123,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var timerDisplayDurationValue: TextView
     private lateinit var overlayCornerStyleToggleGroup: MaterialButtonToggleGroup
     private lateinit var overlayBorderSwitch: SwitchCompat
+    private lateinit var overlayGlassSwitch: SwitchCompat
+    private lateinit var overlayFontToggleGroup: MaterialButtonToggleGroup
 
     private lateinit var resetHourSpinner: Spinner
     private lateinit var resetMinuteSpinner: Spinner
@@ -214,6 +216,8 @@ class SettingsActivity : AppCompatActivity() {
         timerDisplayDurationValue = findViewById(R.id.timerDisplayDurationValue)
         overlayCornerStyleToggleGroup = findViewById(R.id.overlayCornerStyleToggleGroup)
         overlayBorderSwitch = findViewById(R.id.overlayBorderSwitch)
+        overlayGlassSwitch = findViewById(R.id.overlayGlassSwitch)
+        overlayFontToggleGroup = findViewById(R.id.overlayFontToggleGroup)
 
         resetHourSpinner = findViewById(R.id.resetHourSpinner)
         resetMinuteSpinner = findViewById(R.id.resetMinuteSpinner)
@@ -308,6 +312,14 @@ class SettingsActivity : AppCompatActivity() {
             else R.id.overlayCornerStyleSquare
         )
         overlayBorderSwitch.isChecked = settings.borderEnabled
+        overlayGlassSwitch.isChecked = settings.glassEnabled
+        overlayFontToggleGroup.check(
+            when (settings.font) {
+                AppSettings.FONT_INTER -> R.id.overlayFontInter
+                AppSettings.FONT_MONTSERRAT -> R.id.overlayFontMontserrat
+                else -> R.id.overlayFontDefault
+            }
+        )
 
         resetHourSpinner.setSelection(settingsRepository.getResetHour())
         resetMinuteSpinner.setSelection(settingsRepository.getResetMinute())
@@ -521,6 +533,20 @@ class SettingsActivity : AppCompatActivity() {
 
         overlayBorderSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (!bindingControls) commit(settings.copy(borderEnabled = isChecked))
+        }
+
+        overlayGlassSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (!bindingControls) commit(settings.copy(glassEnabled = isChecked))
+        }
+
+        overlayFontToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (bindingControls || !isChecked) return@addOnButtonCheckedListener
+            val font = when (checkedId) {
+                R.id.overlayFontInter -> AppSettings.FONT_INTER
+                R.id.overlayFontMontserrat -> AppSettings.FONT_MONTSERRAT
+                else -> AppSettings.FONT_DEFAULT
+            }
+            if (font != settings.font) commit(settings.copy(font = font))
         }
     }
 
@@ -773,6 +799,8 @@ class SettingsActivity : AppCompatActivity() {
         s.put("timer_display_duration_seconds", settings.timerDisplayDurationSeconds)
         s.put("overlay_corner_style", settings.cornerStyle)
         s.put("overlay_border_enabled", settings.borderEnabled)
+        s.put("overlay_glass_enabled", settings.glassEnabled)
+        s.put("overlay_font", settings.font)
 
         // Custom per-level drag positions as fractions of screen [0f, 1f].
         val positions = JSONObject()
@@ -852,6 +880,8 @@ class SettingsActivity : AppCompatActivity() {
                 timerDisplayDurationSeconds = if (s.has("timer_display_duration_seconds")) s.getInt("timer_display_duration_seconds") else current.timerDisplayDurationSeconds,
                 cornerStyle = s.optString("overlay_corner_style").takeIf { it.isNotEmpty() } ?: current.cornerStyle,
                 borderEnabled = if (s.has("overlay_border_enabled")) s.getBoolean("overlay_border_enabled") else current.borderEnabled,
+                glassEnabled = if (s.has("overlay_glass_enabled")) s.getBoolean("overlay_glass_enabled") else current.glassEnabled,
+                font = s.optString("overlay_font").takeIf { it.isNotEmpty() } ?: current.font,
             )
             settingsRepository.saveOverlaySettings(merged)
 
