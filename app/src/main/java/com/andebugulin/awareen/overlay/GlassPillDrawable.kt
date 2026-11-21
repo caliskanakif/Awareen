@@ -18,9 +18,9 @@ import kotlin.math.min
 /**
  * The "Timer Pill: Glass + Border on Top" look as an overlay background.
  *
- * Layer order follows the reference page:
- *   outer drop shadow (0 12px 34px rgba(0,0,0,.5)) and the border's glow
- *   (0 0 14px rgba(border,.25)), both outside the pill only →
+ * Layer order follows the reference page, except that its outer drop shadow
+ * (0 12px 34px rgba(0,0,0,.5)) is left out at the user's request:
+ *   the border's glow (0 0 14px rgba(border,.25)), outside the pill only →
  *   glass body (rgba(255,255,255,.05)) → inset glow (inset 0 0 22px
  *   rgba(255,255,255,.06)) → top highlight (inset 0 1px 0 rgba(255,255,255,.35))
  *   → glossy sheen (linear-gradient(165deg, .22, 0 40%, 0 72%, .08)) →
@@ -63,15 +63,11 @@ class GlassPillDrawable(private val density: Float) : Drawable() {
         path.reset()
         path.addRoundRect(pill, r, r, Path.Direction.CW)
 
-        // ---- outside the pill: drop shadow, then the border's glow
+        // ---- outside the pill: the border's glow (the page's drop shadow is left out on purpose)
         canvas.save()
         canvas.clipOutPath(path)
         fill.shader = null
         fill.style = Paint.Style.FILL
-        blurred(fill, 34f * k)
-        fill.color = Color.argb(128, 0, 0, 0)
-        tmp.set(pill); tmp.offset(0f, 12f * k)
-        canvas.drawRoundRect(tmp, r, r, fill)
         blurred(fill, 14f * k)
         fill.color = withAlpha(borderColor, 0.25f)
         canvas.drawRoundRect(pill, r, r, fill)

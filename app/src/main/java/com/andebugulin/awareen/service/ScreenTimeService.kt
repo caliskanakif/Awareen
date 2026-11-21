@@ -20,6 +20,7 @@ import androidx.core.app.NotificationCompat
 import com.andebugulin.awareen.R
 import com.andebugulin.awareen.data.AppSettings
 import com.andebugulin.awareen.data.AppUsageRepository
+import com.andebugulin.awareen.data.IdlePauseLog
 import com.andebugulin.awareen.data.ScreenTimeRepository
 import com.andebugulin.awareen.data.SettingsRepository
 import com.andebugulin.awareen.overlay.OverlayController
@@ -36,6 +37,7 @@ class ScreenTimeService : Service() {
     private lateinit var screenStateMonitor: ScreenStateMonitor
     private lateinit var appUsageRepository: AppUsageRepository
     private lateinit var idleWatcher: IdleWatcher
+    private lateinit var idlePauses: IdlePauseLog
     private var idleTimeoutMinutes = 0
     private val appUsageExecutor = Executors.newSingleThreadExecutor()
     private var screenTimeSeconds = 0
@@ -65,7 +67,12 @@ class ScreenTimeService : Service() {
             }
 
             // Screen on and unlocked, and either touched recently or playing media (see IdleMath).
-            if (screenStateMonitor.isActive() && idleWatcher.counts(idleTimeoutMinutes)) {
+            // An idle pause is logged so per-app time leaves out the same minutes.
+            val active = screenStateMonitor.isActive()
+            val counting = active && idleWatcher.counts(idleTimeoutMinutes)
+            if (active && !counting) idlePauses.begin(System.currentTimeMillis())
+            else idlePauses.end(System.currentTimeMillis())
+            if (counting) {
                 screenTimeSeconds++
 
                 overlayController.render(screenTimeSeconds, settings)
@@ -174,6 +181,7 @@ class ScreenTimeService : Service() {
             appUsageRepository = AppUsageRepository(this, prefs)
             overlayController = OverlayController(this, prefs)
             idleWatcher = IdleWatcher(this)
+            idlePauses = IdlePauseLog(prefs)
             loadSettings()
 
             // Check for any missed resets (e.g. phone was off overnight)

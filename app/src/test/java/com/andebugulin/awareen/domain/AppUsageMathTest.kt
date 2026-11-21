@@ -11,6 +11,8 @@ class AppUsageMathTest {
     private fun fg(s: Long, pkg: String) = Event(s * 1000, pkg, Type.FOREGROUND)
     private fun bg(s: Long, pkg: String) = Event(s * 1000, pkg, Type.BACKGROUND)
     private fun off(s: Long) = Event(s * 1000, "android", Type.SCREEN_OFF)
+    private fun pause(s: Long) = Event(s * 1000, "", Type.PAUSE)
+    private fun resume(s: Long) = Event(s * 1000, "", Type.RESUME)
 
     private fun run(vararg events: Event, start: Long = 0, end: Long = 10_000) =
         AppUsageMath.foregroundSeconds(events.toList(), start * 1000, end * 1000)
@@ -61,5 +63,23 @@ class AppUsageMathTest {
             listOf(Event(0, "a", Type.FOREGROUND), Event(500, "a", Type.BACKGROUND)), 0, 10_000
         )
         assertTrue(result.isEmpty())
+    }
+
+    // --- idle pauses (screen on, untouched, no media) ----------------------
+
+    @Test
+    fun `an idle pause takes its time out of the app in front`() {
+        // a in front 0..100, paused 30..80: 30 s before + 20 s after
+        assertEquals(mapOf("a" to 50), run(fg(0, "a"), pause(30), resume(80), bg(100, "a")))
+    }
+
+    @Test
+    fun `an app that comes forward during a pause counts only after it`() {
+        assertEquals(mapOf("a" to 10, "b" to 5), run(fg(0, "a"), pause(10), fg(20, "b"), resume(40), bg(45, "b")))
+    }
+
+    @Test
+    fun `screen off during a pause leaves nothing to resume`() {
+        assertEquals(mapOf("a" to 10), run(fg(0, "a"), pause(10), off(20), resume(20)))
     }
 }

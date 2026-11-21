@@ -30,6 +30,7 @@ class AppUsageRepository(
 ) {
     private val appContext = context.applicationContext
     private val settings = SettingsRepository(appContext)
+    private val pauses = IdlePauseLog(prefs)
 
     constructor(context: Context) : this(
         context,
@@ -123,6 +124,13 @@ class AppUsageRepository(
             Log.e(TAG, "queryEvents failed: ${ex.message}", ex)
             return emptyMap()
         }
+
+        // Idle pauses count for apps exactly as for the total: not at all.
+        pauses.between(start - LOOKBACK_MS, end).forEach { (s, e) ->
+            events.add(AppUsageMath.Event(s, "", AppUsageMath.Type.PAUSE))
+            events.add(AppUsageMath.Event(e, "", AppUsageMath.Type.RESUME))
+        }
+        events.sortBy { it.timestampMs }   // stable: same-time system events keep their order
 
         val ignored = ignoredPackages()
         return AppUsageMath.foregroundSeconds(events, start, end)
