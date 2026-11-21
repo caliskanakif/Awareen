@@ -67,6 +67,11 @@ object AppSettings {
     const val RESET_HOUR = "reset_hour" // Integer (0-23)
     const val RESET_MINUTE = "reset_minute" // Integer (0-59)
 
+    // --- Idle pause: stop counting after this many minutes without a touch (0 = off) ---
+    const val IDLE_TIMEOUT_MINUTES = "idle_timeout_minutes"
+    const val DEFAULT_IDLE_TIMEOUT_MINUTES = 5
+    val IDLE_TIMEOUT_OPTIONS = listOf(0, 1, 2, 3, 5, 10, 15, 30)
+
     // --- Default Values ---
     // Muted, not-pure-RGB defaults (part of the calm/professional redesign,
     // see strategy.md) — legible severity progression without the old

@@ -269,23 +269,60 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <TextView
-                    style="@style/TextAppearance.Awareen.Overline"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="8dp"
-                    android:text="Day by day" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/TextAppearance.Awareen.Overline"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Day by day" />
+
+                    <Button
+                        android:id="@+id/trendLineButton"
+                        style="@style/Widget.Awareen.Button.Flat"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="6dp"
+                        android:minWidth="0dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:text="Line"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/trendBarsButton"
+                        style="@style/Widget.Awareen.Button.Flat"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:minWidth="0dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:text="Bars"
+                        android:textSize="13sp" />
+                </LinearLayout>
 
                 <com.andebugulin.awareen.ui.LineChartView
                     android:id="@+id/overviewTrendChart"
                     android:layout_width="match_parent"
                     android:layout_height="170dp" />
 
+                <com.andebugulin.awareen.ui.BarChartView
+                    android:id="@+id/overviewTrendBars"
+                    android:layout_width="match_parent"
+                    android:layout_height="170dp"
+                    android:visibility="gone" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Tap a point to open that day. Dashed line: average."
+                    android:text="Tap or slide to see a day, tap it again to open it."
                     android:textColor="@color/text_muted"
                     android:textSize="12sp" />
             </LinearLayout>

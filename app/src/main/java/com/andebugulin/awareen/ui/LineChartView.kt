@@ -55,6 +55,10 @@ class LineChartView @JvmOverloads constructor(
         pathEffect = DashPathEffect(floatArrayOf(dp(4f), dp(4f)), 0f)
     }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lineColor }
+    private val guidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.control_track)
+        strokeWidth = dp(1f)
+    }
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.surface)
     }
@@ -106,6 +110,8 @@ class LineChartView @JvmOverloads constructor(
             val avgY = yAt(nonZero.sum() / nonZero.size)
             canvas.drawLine(xAt(0), avgY, xAt(values.size - 1), avgY, avgPaint)
         }
+        // A thin guide down from the selected point, so it's clear which day the value belongs to.
+        if (selected in values.indices) canvas.drawLine(xAt(selected), top, xAt(selected), bottom, guidePaint)
         canvas.drawPath(line, linePaint)
 
         // Beyond a month the dots would merge into a bead chain; then only the selected one is drawn.
@@ -116,8 +122,10 @@ class LineChartView @JvmOverloads constructor(
             canvas.drawCircle(xAt(i), yAt(v), r, dotPaint)
         }
 
-        // Labels: first, last and the selected day, so they never crowd.
-        setOf(0, values.size - 1, selected).filter { it in labels.indices }.forEach { i ->
+        // Labels: first, last and the selected day; an end label close to the selected one is left out.
+        setOf(0, values.size - 1, selected).filter { it in labels.indices }
+            .filter { it == selected || selected !in labels.indices || abs(xAt(it) - xAt(selected)) > dp(44f) }
+            .forEach { i ->
             val x = xAt(i).coerceIn(dp(18f), width - dp(18f))
             canvas.drawText(labels[i], x, height - dp(2f), if (i == selected) valuePaint else labelPaint)
         }
@@ -133,13 +141,46 @@ class LineChartView @JvmOverloads constructor(
         }
     }
 
+    private var selectedAtDown = -1
+    private var downX = 0f
+    private var downY = 0f
+    private val touchSlop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+
+    /**
+     * Touching or sliding along the chart selects the nearest day and shows its
+     * value right there. Tapping the day that is already selected opens it
+     * ([onPointTap]).
+     */
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (values.isEmpty() || onPointTap == null) return super.onTouchEvent(event)
-        if (event.action == MotionEvent.ACTION_UP) {
-            val nearest = values.indices.minByOrNull { abs(xAt(it) - event.x) } ?: return true
-            onPointTap?.invoke(nearest)
+        if (values.isEmpty()) return super.onTouchEvent(event)
+        val nearest = values.indices.minByOrNull { abs(xAt(it) - event.x) } ?: return true
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                selectedAtDown = selected
+                downX = event.x
+                downY = event.y
+                select(nearest)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                // Sliding sideways scrubs through the days; sliding up or down still scrolls the page.
+                val dx = abs(event.x - downX)
+                if (dx > touchSlop && dx > abs(event.y - downY)) parent?.requestDisallowInterceptTouchEvent(true)
+                select(nearest)
+            }
+            MotionEvent.ACTION_UP -> {
+                if (nearest == selectedAtDown) onPointTap?.invoke(nearest) else select(nearest)
+                parent?.requestDisallowInterceptTouchEvent(false)
+            }
+            MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(false)
         }
         return true
+    }
+
+    private fun select(i: Int) {
+        if (i == selected) return
+        selected = i
+        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+        invalidate()
     }
 }

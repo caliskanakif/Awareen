@@ -35,6 +35,8 @@ class ScreenTimeService : Service() {
     private lateinit var resetScheduler: ResetScheduler
     private lateinit var screenStateMonitor: ScreenStateMonitor
     private lateinit var appUsageRepository: AppUsageRepository
+    private lateinit var idleWatcher: IdleWatcher
+    private var idleTimeoutMinutes = 0
     private val appUsageExecutor = Executors.newSingleThreadExecutor()
     private var screenTimeSeconds = 0
     private val handler = Handler(Looper.getMainLooper())
@@ -62,7 +64,8 @@ class ScreenTimeService : Service() {
                 overlayController.ensureAttached(screenTimeSeconds, settings)
             }
 
-            if (screenStateMonitor.isActive()) {
+            // Screen on and unlocked, and either touched recently or playing media (see IdleMath).
+            if (screenStateMonitor.isActive() && idleWatcher.counts(idleTimeoutMinutes)) {
                 screenTimeSeconds++
 
                 overlayController.render(screenTimeSeconds, settings)
@@ -102,10 +105,12 @@ class ScreenTimeService : Service() {
                 }
 
                 Intent.ACTION_SCREEN_ON -> {
+                    idleWatcher.touched()
                     checkAndPerformResetIfNeeded()
                 }
 
                 Intent.ACTION_USER_PRESENT -> {
+                    idleWatcher.touched()
                     // User just unlocked — critical reset check point
                     checkAndPerformResetIfNeeded()
                     handler.removeCallbacks(screenTimeUpdateRunnable)
@@ -168,6 +173,7 @@ class ScreenTimeService : Service() {
             screenStateMonitor = ScreenStateMonitor(this)
             appUsageRepository = AppUsageRepository(this, prefs)
             overlayController = OverlayController(this, prefs)
+            idleWatcher = IdleWatcher(this)
             loadSettings()
 
             // Check for any missed resets (e.g. phone was off overnight)
@@ -215,6 +221,7 @@ class ScreenTimeService : Service() {
 
             overlayController.create(handler, settings.level1.position)
             overlayController.render(screenTimeSeconds, settings)
+            idleWatcher.start()
 
             handler.removeCallbacks(screenTimeUpdateRunnable)
             handler.post(screenTimeUpdateRunnable)
@@ -245,6 +252,7 @@ class ScreenTimeService : Service() {
         }
 
         overlayController.destroy()
+        idleWatcher.stop()
         appUsageExecutor.shutdown()
     }
 
@@ -325,6 +333,7 @@ class ScreenTimeService : Service() {
 
     private fun loadSettings() {
         settings = settingsRepository.loadOverlaySettings()
+        idleTimeoutMinutes = settingsRepository.getIdleTimeoutMinutes()
         Log.d(TAG, "Settings loaded: displayMode=${settings.timerDisplayMode}")
     }
 

@@ -128,6 +128,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var resetHourSpinner: Spinner
     private lateinit var resetMinuteSpinner: Spinner
+    private lateinit var idleTimeoutSpinner: Spinner
 
     // =========================================================================
     // SAF launchers for export/import
@@ -163,6 +164,7 @@ class SettingsActivity : AppCompatActivity() {
         setupStageControls()
         setupTimerDisplayControls()
         setupResetTimeControls()
+        setupIdleTimeoutControl()
         setupHelpButtons()
 
         findViewById<ImageButton>(R.id.closeButton).setOnClickListener { finish() }
@@ -221,6 +223,7 @@ class SettingsActivity : AppCompatActivity() {
 
         resetHourSpinner = findViewById(R.id.resetHourSpinner)
         resetMinuteSpinner = findViewById(R.id.resetMinuteSpinner)
+        idleTimeoutSpinner = findViewById(R.id.idleTimeoutSpinner)
     }
 
     // =========================================================================
@@ -323,6 +326,7 @@ class SettingsActivity : AppCompatActivity() {
 
         resetHourSpinner.setSelection(settingsRepository.getResetHour())
         resetMinuteSpinner.setSelection(settingsRepository.getResetMinute())
+        idleTimeoutSpinner.setSelection(idleOptionIndex(settingsRepository.getIdleTimeoutMinutes()))
         bindingControls = false
 
         bindStageControls()
@@ -586,6 +590,27 @@ class SettingsActivity : AppCompatActivity() {
         resetMinuteSpinner.onItemSelectedListener = listener
     }
 
+    /** Position of [minutes] in the idle options; a value from an old import falls to the nearest above. */
+    private fun idleOptionIndex(minutes: Int): Int =
+        AppSettings.IDLE_TIMEOUT_OPTIONS.indexOfFirst { it >= minutes }
+            .takeIf { it >= 0 } ?: AppSettings.IDLE_TIMEOUT_OPTIONS.lastIndex
+
+    private fun setupIdleTimeoutControl() {
+        idleTimeoutSpinner.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item,
+            AppSettings.IDLE_TIMEOUT_OPTIONS.map { if (it == 0) "Never (always count)" else "$it min without a touch" }
+        )
+        idleTimeoutSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val minutes = AppSettings.IDLE_TIMEOUT_OPTIONS[position]
+                if (minutes == settingsRepository.getIdleTimeoutMinutes()) return
+                settingsRepository.saveIdleTimeoutMinutes(minutes)
+                settingsRepository.notifySettingsUpdated() // the service reloads it
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
     // =========================================================================
     // HELP
     // =========================================================================
@@ -615,6 +640,13 @@ class SettingsActivity : AppCompatActivity() {
             showHelpDialog(
                 "Daily reset",
                 "The time of day when your screen-time counter resets to zero. Reset is enforced even when the app is asleep or the device is in Doze."
+            )
+        }
+        findViewById<ImageButton>(R.id.helpIdlePause).setOnClickListener {
+            showHelpDialog(
+                "Pause when idle",
+                "If you don't touch the screen for this long, the timer stops counting, for example when the phone lies next to you with the screen on. " +
+                    "While music or a video is playing it keeps counting without touches. Any touch starts it again right away."
             )
         }
         findViewById<ImageButton>(R.id.helpImportExport).setOnClickListener {
@@ -793,6 +825,7 @@ class SettingsActivity : AppCompatActivity() {
 
         s.put("reset_hour", settingsRepository.getResetHour())
         s.put("reset_minute", settingsRepository.getResetMinute())
+        s.put("idle_timeout_minutes", settingsRepository.getIdleTimeoutMinutes())
 
         s.put("timer_display_mode", settings.timerDisplayMode)
         s.put("timer_display_interval_minutes", settings.timerDisplayIntervalMinutes)
@@ -889,6 +922,7 @@ class SettingsActivity : AppCompatActivity() {
                 if (s.has("reset_hour")) s.getInt("reset_hour") else settingsRepository.getResetHour(),
                 if (s.has("reset_minute")) s.getInt("reset_minute") else settingsRepository.getResetMinute(),
             )
+            if (s.has("idle_timeout_minutes")) settingsRepository.saveIdleTimeoutMinutes(s.getInt("idle_timeout_minutes"))
 
             // Custom drag positions. v3 stores fractions (fx/fy); v2 stored
             // absolute pixels (x/y) — convert those using the current screen

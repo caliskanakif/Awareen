@@ -36,6 +36,9 @@ class OverviewSection(
     private val worker = Executors.newSingleThreadExecutor()
     private val labels = mutableMapOf<String, String>()   // package → app name, looked up once
 
+    /** Remembers small view choices (line or bars); separate from Awareen's own data and settings. */
+    private val uiPrefs = activity.getSharedPreferences("analytics_ui", android.content.Context.MODE_PRIVATE)
+
     private class Overview(
         val start: LocalDate,
         val totals: List<Int>,
@@ -57,11 +60,24 @@ class OverviewSection(
         rangeButtons.forEach { (id, days) ->
             activity.findViewById<Button>(id).setOnClickListener { select(days) }
         }
+        activity.findViewById<Button>(R.id.trendLineButton).setOnClickListener { showTrendAsBars(false) }
+        activity.findViewById<Button>(R.id.trendBarsButton).setOnClickListener { showTrendAsBars(true) }
+        showTrendAsBars(uiPrefs.getBoolean(KEY_TREND_BARS, false))
         activity.findViewById<DaySplitChartView>(R.id.overviewAppsChart).apply {
             setTextColors(ContextCompat.getColor(activity, R.color.text_primary),
                 ContextCompat.getColor(activity, R.color.text_secondary))
             setValueTypeface(androidx.core.content.res.ResourcesCompat.getFont(activity, R.font.fraunces))
         }
+    }
+
+    private fun showTrendAsBars(bars: Boolean) {
+        uiPrefs.edit().putBoolean(KEY_TREND_BARS, bars).apply()
+        activity.findViewById<View>(R.id.overviewTrendChart).visibility = if (bars) View.GONE else View.VISIBLE
+        activity.findViewById<View>(R.id.overviewTrendBars).visibility = if (bars) View.VISIBLE else View.GONE
+        activity.findViewById<Button>(R.id.trendLineButton).setTextColor(ContextCompat.getColor(activity,
+            if (bars) R.color.text_muted else R.color.accent_primary))
+        activity.findViewById<Button>(R.id.trendBarsButton).setTextColor(ContextCompat.getColor(activity,
+            if (bars) R.color.accent_primary else R.color.text_muted))
     }
 
     fun show() = select(rangeDays)
@@ -122,12 +138,19 @@ class OverviewSection(
             if (o.activeDays == 0) "–" else fmt(o.total / o.activeDays)
         activity.findViewById<TextView>(R.id.overviewDays).text = o.activeDays.toString()
 
-        // Day by day; the busiest day is highlighted and labelled.
+        // Day by day, as a line or as bars; the busiest day starts selected.
         val dayLabel = DateTimeFormatter.ofPattern("d.M.", Locale.ENGLISH)
-        val trend = activity.findViewById<LineChartView>(R.id.overviewTrendChart)
+        val dayLabels = o.totals.indices.map { o.start.plusDays(it.toLong()).format(dayLabel) }
         val busiest = o.totals.indices.maxByOrNull { o.totals[it] }?.takeIf { o.totals[it] > 0 } ?: -1
-        trend.setData(o.totals, o.totals.indices.map { o.start.plusDays(it.toLong()).format(dayLabel) }, busiest, fmt)
-        trend.onPointTap = { i -> DayActivity.open(activity, o.start.plusDays(i.toLong())) }
+        val openDay = { i: Int -> DayActivity.open(activity, o.start.plusDays(i.toLong())) }
+        activity.findViewById<LineChartView>(R.id.overviewTrendChart).apply {
+            setData(o.totals, dayLabels, busiest, fmt)
+            onPointTap = openDay
+        }
+        activity.findViewById<BarChartView>(R.id.overviewTrendBars).apply {
+            setData(o.totals, dayLabels, (o.totals.size / 6).coerceAtLeast(1), fmt, busiest)
+            onBarTap = openDay
+        }
 
         // Apps
         val chart = activity.findViewById<DaySplitChartView>(R.id.overviewAppsChart)
@@ -170,5 +193,6 @@ class OverviewSection(
 
     companion object {
         private const val APP_ROWS = 12
+        private const val KEY_TREND_BARS = "trend_as_bars"
     }
 }

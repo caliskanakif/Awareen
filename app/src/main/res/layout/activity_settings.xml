@@ -557,6 +557,50 @@
                 android:backgroundTint="@color/control_track" />
         </GridLayout>
 
+        <!-- ========================== IDLE PAUSE ========================== -->
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                style="@style/SettingsHeader"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="0dp"
+                android:text="Pause when idle"
+                android:textColor="@color/text_primary" />
+
+            <ImageButton
+                android:id="@+id/helpIdlePause"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="What does Pause when idle do?"
+                android:padding="6dp"
+                android:src="@drawable/ic_info"
+                app:tint="@color/text_muted" />
+        </LinearLayout>
+
+        <GridLayout
+            style="@style/SettingsGrid"
+            android:background="@drawable/rounded_background">
+
+            <TextView
+                style="@style/SettingsLabel"
+                android:text="Stop counting after:"
+                android:textColor="@color/text_primary" />
+
+            <Spinner
+                android:id="@+id/idleTimeoutSpinner"
+                style="@style/SettingsControl"
+                android:backgroundTint="@color/control_track" />
+        </GridLayout>
+
         <!-- ======================== IMPORT / EXPORT ======================== -->
 
         <LinearLayout

@@ -146,6 +146,18 @@ class SettingsRepository(
     }
 
     // =========================================================================
+    // IDLE PAUSE
+    // =========================================================================
+
+    /** Minutes without a touch after which counting pauses (media keeps it going); 0 = off. */
+    fun getIdleTimeoutMinutes(): Int =
+        prefs.getInt(AppSettings.IDLE_TIMEOUT_MINUTES, AppSettings.DEFAULT_IDLE_TIMEOUT_MINUTES)
+
+    fun saveIdleTimeoutMinutes(minutes: Int) {
+        prefs.edit().putInt(AppSettings.IDLE_TIMEOUT_MINUTES, minutes.coerceAtLeast(0)).apply()
+    }
+
+    // =========================================================================
     // "YOUR DAY" SPLIT (Analytics) — how much of a day goes to sleep and to
     // work/obligations, so the rest can be split into screen time vs free time.
     // =========================================================================

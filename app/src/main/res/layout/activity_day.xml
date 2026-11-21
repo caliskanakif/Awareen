@@ -249,7 +249,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:text="Tap a point to open that day. Dashed line: average."
+                    android:text="Tap or slide to see a day, tap it again to open it. Dashed line: average."
                     android:textColor="@color/text_muted"
                     android:textSize="12sp" />
             </LinearLayout>
